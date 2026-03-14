@@ -72,8 +72,30 @@ const frontendDist = process.env.FRONTEND_DIST
   ? path.resolve(process.env.FRONTEND_DIST)
   : path.resolve(process.cwd(), "artifacts/web/dist/public");
 if (process.env.NODE_ENV === "production" && existsSync(frontendDist)) {
-  app.use(express.static(frontendDist, { maxAge: "7d", etag: true }));
+  // Hashed assets (JS/CSS with content hash in filename) → long-lived cache
+  app.use(
+    "/assets",
+    express.static(path.join(frontendDist, "assets"), {
+      maxAge: "7d",
+      immutable: true,
+      etag: true,
+    })
+  );
+  // Everything else (sw.js, manifest.json, icons…) → no cache
+  app.use(
+    express.static(frontendDist, {
+      maxAge: 0,
+      etag: true,
+      setHeaders(res, filePath) {
+        if (filePath.endsWith(".html")) {
+          res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        }
+      },
+    })
+  );
+  // SPA fallback — always return a fresh index.html
   app.use((_req, res) => {
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.sendFile(path.join(frontendDist, "index.html"));
   });
 } else {
