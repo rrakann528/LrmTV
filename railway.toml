@@ -1,6 +1,6 @@
 [build]
-builder = "NIXPACKS"
-buildCommand = "pnpm install --no-frozen-lockfile && BASE_PATH=/ pnpm --filter @workspace/web build && pnpm --filter @workspace/api-server build"
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
 
 [deploy]
 startCommand = "node artifacts/api-server/dist/index.cjs"
