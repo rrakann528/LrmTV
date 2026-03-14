@@ -1,0 +1,332 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: LrmTV API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: rooms
+    description: Room operations
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /rooms:
+    post:
+      operationId: createRoom
+      tags: [rooms]
+      summary: Create a new room
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRoomBody"
+      responses:
+        "201":
+          description: Room created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Room"
+  /rooms/{slug}:
+    get:
+      operationId: getRoom
+      tags: [rooms]
+      summary: Get room by slug
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Room found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Room"
+        "404":
+          description: Room not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /rooms/{slug}/playlist:
+    get:
+      operationId: getRoomPlaylist
+      tags: [rooms]
+      summary: Get playlist for a room
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Playlist items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlaylistItem"
+    post:
+      operationId: addPlaylistItem
+      tags: [rooms]
+      summary: Add item to room playlist
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddPlaylistItemBody"
+      responses:
+        "201":
+          description: Item added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaylistItem"
+  /rooms/{slug}/playlist/{itemId}:
+    delete:
+      operationId: deletePlaylistItem
+      tags: [rooms]
+      summary: Remove an item from room playlist
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Item removed
+        "404":
+          description: Room not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /rooms/{slug}/playlist/reorder:
+    patch:
+      operationId: reorderPlaylist
+      tags: [rooms]
+      summary: Reorder playlist items
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReorderPlaylistBody"
+      responses:
+        "200":
+          description: Reordered playlist
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlaylistItem"
+        "404":
+          description: Room not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /rooms/{slug}/messages:
+    get:
+      operationId: getRoomMessages
+      tags: [rooms]
+      summary: Get recent chat messages for a room
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Chat messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChatMessage"
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+    CreateRoomBody:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [public, private]
+        username:
+          type: string
+      required:
+        - name
+        - type
+        - username
+    Room:
+      type: object
+      properties:
+        id:
+          type: integer
+        slug:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [public, private]
+        createdAt:
+          type: string
+          format: date-time
+        background:
+          type: string
+      required:
+        - id
+        - slug
+        - name
+        - type
+        - createdAt
+    PlaylistItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        roomId:
+          type: integer
+        url:
+          type: string
+        sourceType:
+          type: string
+          enum: [youtube, vimeo, twitch, mp4, m3u8, other]
+        title:
+          type: string
+        position:
+          type: integer
+        addedBy:
+          type: string
+          nullable: true
+      required:
+        - id
+        - roomId
+        - url
+        - sourceType
+        - title
+        - position
+    AddPlaylistItemBody:
+      type: object
+      properties:
+        url:
+          type: string
+        title:
+          type: string
+        sourceType:
+          type: string
+          enum: [youtube, vimeo, twitch, mp4, m3u8, other]
+        addedBy:
+          type: string
+      required:
+        - url
+        - title
+        - sourceType
+    ReorderPlaylistBody:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              position:
+                type: integer
+            required:
+              - id
+              - position
+      required:
+        - items
+    ChatMessage:
+      type: object
+      properties:
+        id:
+          type: integer
+        roomId:
+          type: integer
+        username:
+          type: string
+        content:
+          type: string
+        type:
+          type: string
+          enum: [message, system, emoji]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - roomId
+        - username
+        - content
+        - type
+        - createdAt
