@@ -17,7 +17,12 @@ import {
 
 const app: Express = express();
 
-// ── Trust proxy (Replit / Cloudflare) ─────────────────────────────────────────
+// ── Healthcheck — FIRST, before all middleware ─────────────────────────────────
+app.get("/api/healthz", (_req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
+// ── Trust proxy (Replit / Cloudflare / Railway) ────────────────────────────────
 app.set("trust proxy", 1);
 
 // ── Security headers ───────────────────────────────────────────────────────────
@@ -72,7 +77,6 @@ if (process.env.NODE_ENV === "production" && existsSync(frontendDist)) {
     res.sendFile(path.join(frontendDist, "index.html"));
   });
 } else {
-  // ── 404 handler (dev) ────────────────────────────────────────────────────────
   app.use((_req, res) => {
     res.status(404).json({ error: "المسار غير موجود" });
   });
