@@ -4,7 +4,7 @@ echo "[start] DATABASE_URL set: $([ -n "$DATABASE_URL" ] && echo YES || echo NO)
 
 if [ -n "$DATABASE_URL" ]; then
   echo "[start] Running database migrations..."
-  node /app/migrate.cjs
+  node /app/lib/db/migrate.cjs
   STATUS=$?
   if [ $STATUS -eq 0 ]; then
     echo "[start] Migrations completed successfully."
