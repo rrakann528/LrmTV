@@ -21,7 +21,9 @@ interface PublicRoom {
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 function fetchRooms(): Promise<PublicRoom[]> {
-  return fetch(`${BASE}/api/rooms`, { credentials: 'include' }).then(r => r.json());
+  return fetch(`${BASE}/api/rooms`, { credentials: 'include' })
+    .then(r => r.json())
+    .then(data => (Array.isArray(data) ? data : []));
 }
 
 function useKeyboardOffset() {

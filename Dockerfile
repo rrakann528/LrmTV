@@ -8,5 +8,6 @@ COPY . .
 RUN pnpm install --no-frozen-lockfile
 RUN BASE_PATH=/ pnpm --filter @workspace/web build
 RUN pnpm --filter @workspace/api-server build
+RUN chmod +x /app/start.sh
 EXPOSE 3000
-CMD ["node", "artifacts/api-server/dist/index.cjs"]
+CMD ["/bin/sh", "/app/start.sh"]
