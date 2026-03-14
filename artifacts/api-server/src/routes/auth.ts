@@ -30,36 +30,41 @@ const RegisterBody = z.object({
 });
 
 router.post("/auth/register", async (req, res): Promise<void> => {
-  const parsed = RegisterBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.errors[0]?.message || "بيانات غير صحيحة" });
-    return;
+  try {
+    const parsed = RegisterBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0]?.message || "بيانات غير صحيحة" });
+      return;
+    }
+    const { username, email, password, displayName } = parsed.data;
+
+    const [byUsername] = await db.select().from(usersTable).where(eq(usersTable.username, username)).limit(1);
+    if (byUsername) { res.status(409).json({ error: "اسم المستخدم محجوز" }); return; }
+
+    const [byEmail] = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
+    if (byEmail) { res.status(409).json({ error: "البريد الإلكتروني مستخدم مسبقاً" }); return; }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const colors = ["#06B6D4", "#8B5CF6", "#10B981", "#F59E0B", "#EF4444", "#EC4899"];
+    const avatarColor = colors[Math.floor(Math.random() * colors.length)];
+
+    const [user] = await db.insert(usersTable).values({
+      username,
+      email,
+      passwordHash,
+      displayName: displayName || username,
+      avatarColor,
+      provider: "local",
+      emailVerified: false,
+    }).returning();
+
+    const token = signToken(user.id, user.username);
+    res.cookie("token", token, { httpOnly: true, sameSite: "lax", maxAge: 30 * 24 * 60 * 60 * 1000, path: "/" });
+    res.status(201).json(userPublic(user));
+  } catch (err: any) {
+    console.error("[register]", err?.message || err);
+    res.status(500).json({ error: err?.message || "خطأ داخلي في الخادم" });
   }
-  const { username, email, password, displayName } = parsed.data;
-
-  const [byUsername] = await db.select().from(usersTable).where(eq(usersTable.username, username)).limit(1);
-  if (byUsername) { res.status(409).json({ error: "اسم المستخدم محجوز" }); return; }
-
-  const [byEmail] = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
-  if (byEmail) { res.status(409).json({ error: "البريد الإلكتروني مستخدم مسبقاً" }); return; }
-
-  const passwordHash = await bcrypt.hash(password, 10);
-  const colors = ["#06B6D4", "#8B5CF6", "#10B981", "#F59E0B", "#EF4444", "#EC4899"];
-  const avatarColor = colors[Math.floor(Math.random() * colors.length)];
-
-  const [user] = await db.insert(usersTable).values({
-    username,
-    email,
-    passwordHash,
-    displayName: displayName || username,
-    avatarColor,
-    provider: "local",
-    emailVerified: false,
-  }).returning();
-
-  const token = signToken(user.id, user.username);
-  res.cookie("token", token, { httpOnly: true, sameSite: "lax", maxAge: 30 * 24 * 60 * 60 * 1000, path: "/" });
-  res.status(201).json(userPublic(user));
 });
 
 // ── Login ──────────────────────────────────────────────────────────────────────
