@@ -17,6 +17,10 @@ const SUSPICIOUS_HEADERS = [
 
 // ── Bot / Scanner Detection ────────────────────────────────────────────────────
 export function botDetection(req: Request, res: Response, next: NextFunction) {
+  if (req.path === "/healthz") {
+    return next();
+  }
+
   const ua = req.get("user-agent") || "";
 
   if (!ua || ua.length < 5) {
