@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, Component, type ReactNode } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -26,10 +26,35 @@ const queryClient = new QueryClient({
   },
 });
 
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 32, color: '#fff', background: '#0f0f1a', minHeight: '100vh', fontFamily: 'sans-serif' }}>
+          <h2 style={{ color: '#f87171' }}>خطأ في التطبيق</h2>
+          <pre style={{ fontSize: 12, color: '#94a3b8', whiteSpace: 'pre-wrap' }}>
+            {(this.state.error as Error).message}
+          </pre>
+          <button
+            onClick={() => window.location.reload()}
+            style={{ marginTop: 16, padding: '8px 20px', background: '#06b6d4', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer' }}
+          >
+            إعادة المحاولة
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function PageLoader() {
   return (
-    <div className="flex items-center justify-center min-h-screen bg-background">
-      <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'hsl(240 10% 4%)' }}>
+      <div style={{ width: 32, height: 32, borderRadius: '50%', border: '2px solid #06b6d4', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} />
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
@@ -52,16 +77,18 @@ function Router() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <I18nProvider>
-        <PwaInstallBanner />
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <InviteBanner />
-          <Router />
-        </WouterRouter>
-        <Toaster />
-      </I18nProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <I18nProvider>
+          <PwaInstallBanner />
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <InviteBanner />
+            <Router />
+          </WouterRouter>
+          <Toaster />
+        </I18nProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 

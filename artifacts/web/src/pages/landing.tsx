@@ -40,12 +40,7 @@ export default function LandingPage() {
         <div className="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] bg-violet-500/15 rounded-full blur-[100px]" />
       </div>
 
-      <motion.div
-        className="relative z-10 flex flex-col items-center text-center max-w-sm w-full"
-        initial={{ opacity: 0, y: 24 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: 'easeOut' }}
-      >
+      <div className="relative z-10 flex flex-col items-center text-center max-w-sm w-full">
         <div className="w-20 h-20 rounded-2xl bg-primary/20 border border-primary/30 flex items-center justify-center mb-6 shadow-lg shadow-primary/20">
           <Tv className="w-10 h-10 text-primary" />
         </div>
@@ -109,7 +104,7 @@ export default function LandingPage() {
           </div>
           <p className="text-xs text-muted-foreground/30">© 2026 LrmTV · جميع الحقوق محفوظة</p>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }
