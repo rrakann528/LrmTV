@@ -11,12 +11,19 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 
-// ── Detect platform ───────────────────────────────────────────────────────────
-const ua = navigator.userAgent;
-const isIos    = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
-const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
-const isInPwa  = window.matchMedia('(display-mode: standalone)').matches
-              || (window.navigator as any).standalone === true;
+// ── Detect platform (deferred to runtime to avoid SSR/module-eval crashes) ─────
+function getPlatformInfo() {
+  try {
+    const ua      = navigator?.userAgent ?? '';
+    const isIos   = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
+    const isSafari= /^((?!chrome|android).)*safari/i.test(ua);
+    const isInPwa = window.matchMedia?.('(display-mode: standalone)')?.matches === true
+                 || (window.navigator as any).standalone === true;
+    return { isIos, isSafari, isInPwa };
+  } catch {
+    return { isIos: false, isSafari: false, isInPwa: false };
+  }
+}
 
 // ── LrmTV logo ────────────────────────────────────────────────────────────────
 function Logo({ size = 48 }: { size?: number }) {
@@ -159,6 +166,7 @@ export default function PwaInstallBanner() {
   const [showIosGuide,   setShowIosGuide]   = useState(false);
 
   useEffect(() => {
+    const { isInPwa, isIos, isSafari } = getPlatformInfo();
     // Don't show if already installed or user dismissed before
     if (isInPwa) return;
     if (localStorage.getItem('pwa-dismissed')) return;
