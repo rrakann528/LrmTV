@@ -13,6 +13,7 @@ export interface AuthUser {
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 const CACHE_KEY = 'lrmtv_auth_user';
+const TOKEN_KEY = 'lrmtv_auth_token';
 
 function readCache(): AuthUser | null {
   try {
@@ -30,19 +31,37 @@ function writeCache(u: AuthUser | null) {
   } catch {}
 }
 
+function readToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function writeToken(t: string | null) {
+  try {
+    if (t) localStorage.setItem(TOKEN_KEY, t);
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch {}
+}
+
 export async function apiFetch(path: string, opts?: RequestInit) {
+  const token = readToken();
   return fetch(`${BASE}/api${path}`, {
     ...opts,
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...(opts?.headers || {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(opts?.headers || {}),
+    },
   });
 }
 
 export function useAuth() {
-  // Initialise from cache so components can render immediately without spinner
   const cached = readCache();
   const [user, setUserState] = useState<AuthUser | null | undefined>(cached ?? undefined);
-  // If we have a cached user, we're not "loading" from UI perspective
   const [loading, setLoading] = useState(!cached);
 
   const setUser = useCallback((u: AuthUser | null | undefined) => {
@@ -54,8 +73,10 @@ export function useAuth() {
   useEffect(() => {
     apiFetch('/auth/me')
       .then(r => r.ok ? r.json() : null)
-      .then((freshUser: AuthUser | null) => {
-        setUser(freshUser);
+      .then((data: (AuthUser & { token?: string }) | null) => {
+        if (data?.token) writeToken(data.token);
+        const { token: _t, ...freshUser } = data ?? {};
+        setUser(data ? (freshUser as AuthUser) : null);
       })
       .catch(() => {
         // Network error — keep cached user rather than logging out
@@ -67,21 +88,26 @@ export function useAuth() {
     const r = await apiFetch('/auth/register', { method: 'POST', body: JSON.stringify({ username, password }) });
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || 'خطأ في التسجيل');
-    setUser(data);
-    return data as AuthUser;
+    if (data.token) writeToken(data.token);
+    const { token: _t, ...user } = data;
+    setUser(user);
+    return user as AuthUser;
   }, []);
 
   const login = useCallback(async (username: string, password: string) => {
     const r = await apiFetch('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || 'خطأ في تسجيل الدخول');
-    setUser(data);
-    return data as AuthUser;
+    if (data.token) writeToken(data.token);
+    const { token: _t, ...user } = data;
+    setUser(user);
+    return user as AuthUser;
   }, []);
 
   const logout = useCallback(async () => {
     await apiFetch('/auth/logout', { method: 'POST' });
     writeCache(null);
+    writeToken(null);
     setUserState(null);
   }, []);
 

@@ -13,7 +13,7 @@ import { useI18n } from '@/lib/i18n';
 import { useUserSession } from '@/hooks/use-user-session';
 import { useSocket } from '@/hooks/use-socket';
 import { useWebRTC } from '@/hooks/use-webrtc';
-import { useAuth } from '@/hooks/use-auth';
+import { useAuth, apiFetch } from '@/hooks/use-auth';
 import { useGetRoom, useAddPlaylistItem, getGetRoomPlaylistQueryKey } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -116,8 +116,7 @@ export default function RoomPage() {
 
   const handleDeleteRoom = useCallback(async () => {
     try {
-      const base = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
-      const res = await fetch(`${base}/api/rooms/${slug}`, { method: 'DELETE', credentials: 'include' });
+      const res = await apiFetch(`/rooms/${slug}`, { method: 'DELETE' });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         alert(err.error || 'Failed to delete room');

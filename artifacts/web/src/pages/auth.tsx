@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAuth } from '@/hooks/use-auth';
+import { useAuth, apiFetch, writeToken } from '@/hooks/use-auth';
 import { useLocation, useSearch } from 'wouter';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 
@@ -40,17 +40,17 @@ export default function AuthPage() {
       const body: Record<string, string> = { email, password };
       if (mode === 'register') body.username = username;
 
-      const res = await fetch(`${BASE}/api${endpoint}`, {
+      const res = await apiFetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || 'حدث خطأ');
       } else {
-        setUser(data);
+        if (data.token) writeToken(data.token);
+        const { token: _t, ...userData } = data;
+        setUser(userData);
         setLocation('/home');
       }
     } catch {

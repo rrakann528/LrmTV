@@ -60,7 +60,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
 
     const token = signToken(user.id, user.username);
     res.cookie("token", token, { httpOnly: true, sameSite: "lax", maxAge: 30 * 24 * 60 * 60 * 1000, path: "/" });
-    res.status(201).json(userPublic(user));
+    res.status(201).json({ ...userPublic(user), token });
   } catch (err: any) {
     console.error("[register]", err?.message || err);
     res.status(500).json({ error: err?.message || "خطأ داخلي في الخادم" });
@@ -90,7 +90,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
 
   const token = signToken(user.id, user.username);
   res.cookie("token", token, { httpOnly: true, sameSite: "lax", maxAge: 30 * 24 * 60 * 60 * 1000, path: "/" });
-  res.json(userPublic(user));
+  res.json({ ...userPublic(user), token });
 });
 
 // ── Logout ────────────────────────────────────────────────────────────────────
@@ -103,7 +103,9 @@ router.post("/auth/logout", (_req, res): void => {
 router.get("/auth/me", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!)).limit(1);
   if (!user) { res.status(404).json({ error: "Not found" }); return; }
-  res.json(userPublic(user));
+  const freshToken = signToken(user.id, user.username);
+  res.cookie("token", freshToken, { httpOnly: true, sameSite: "lax", maxAge: 30 * 24 * 60 * 60 * 1000, path: "/" });
+  res.json({ ...userPublic(user), token: freshToken });
 });
 
 // ── Update Profile ────────────────────────────────────────────────────────────

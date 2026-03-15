@@ -8,8 +8,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { DmChat } from './dm-chat';
 import { UserProfileSheet } from '@/components/user-profile-sheet';
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
-
 interface FriendUser {
   id: number;
   username: string;
@@ -43,7 +41,7 @@ async function fetchConversations(): Promise<Conversation[]> {
 
 async function searchUsers(q: string): Promise<FriendUser[]> {
   if (!q.trim()) return [];
-  const r = await fetch(`${BASE}/api/friends/search?q=${encodeURIComponent(q)}`, { credentials: 'include' });
+  const r = await apiFetch(`/friends/search?q=${encodeURIComponent(q)}`);
   const data = await r.json();
   return Array.isArray(data) ? data : [];
 }
