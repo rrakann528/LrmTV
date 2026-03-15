@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { Readable } from 'stream';
 
 const router = Router();
 
@@ -226,14 +227,25 @@ router.get('/proxy/segment', async (req, res) => {
       return;
     }
 
-    const contentType = upstreamRes.headers.get('content-type') ?? 'video/mp2t';
-    const buf = Buffer.from(await upstreamRes.arrayBuffer());
-    res.set({
+    // Stream the segment directly to the browser without buffering it fully
+    // on the server — reduces latency for live streams significantly
+    const contentType   = upstreamRes.headers.get('content-type') ?? 'video/mp2t';
+    const contentLength = upstreamRes.headers.get('content-length');
+    const responseHeaders: Record<string, string> = {
       ...CORS_HEADERS,
-      'Content-Type': contentType,
-      'Content-Length': String(buf.length),
+      'Content-Type':  contentType,
       'Cache-Control': 'max-age=30',
-    }).send(buf);
+    };
+    if (contentLength) responseHeaders['Content-Length'] = contentLength;
+    res.set(responseHeaders);
+
+    if (upstreamRes.body) {
+      const readable = Readable.fromWeb(upstreamRes.body as Parameters<typeof Readable.fromWeb>[0]);
+      readable.pipe(res);
+      readable.on('error', () => { try { res.destroy(); } catch { /* ignore */ } });
+    } else {
+      res.end();
+    }
   } catch {
     res.status(502).send('Segment proxy error');
   }

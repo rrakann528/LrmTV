@@ -252,25 +252,42 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
       const HLS_CONFIG: Partial<Hls['config']> = {
         enableWorker: true,
         lowLatencyMode: false,
-        backBufferLength: 30,
-        maxBufferLength: 45,
-        maxMaxBufferLength: 90,
-        manifestLoadingMaxRetry: 1,
-        manifestLoadingTimeOut: 8000,
+
+        // ── Live latency tuning ───────────────────────────────────────────────
+        // Target 2 segments behind live edge instead of the default 3 →
+        // reduces latency from ~18 s to ~10 s without causing buffering
+        liveSyncDurationCount:     2,
+        // If we fall more than 6 segments behind, snap back to live edge
+        liveMaxLatencyDurationCount: 6,
+        // Play at 1.1× to catch up gradually when slightly behind live edge
+        maxLiveSyncPlaybackRate:   1.1,
+
+        // ── Buffer ───────────────────────────────────────────────────────────
+        // 20 s forward buffer is plenty for live; 60 s max ceiling keeps VOD smooth
+        backBufferLength:   6,
+        maxBufferLength:    20,
+        maxMaxBufferLength: 60,
+
+        // ── Retry / timeout ──────────────────────────────────────────────────
+        manifestLoadingMaxRetry:   1,
+        manifestLoadingTimeOut:    8000,
         manifestLoadingRetryDelay: 500,
-        levelLoadingMaxRetry: 3,
-        levelLoadingTimeOut: 15000,
-        fragLoadingMaxRetry: 4,
-        fragLoadingTimeOut: 20000,
-        fragLoadingRetryDelay: 1000,
-        startLevel: -1,
-        abrEwmaDefaultEstimate: 1_000_000,
-        abrBandWidthFactor: 0.85,
-        abrBandWidthUpFactor: 0.6,
-        testBandwidth: false,
+        levelLoadingMaxRetry:      3,
+        levelLoadingTimeOut:       12000,
+        fragLoadingMaxRetry:       3,
+        fragLoadingTimeOut:        12000,  // fail faster; live segments expire anyway
+        fragLoadingRetryDelay:     500,
+
+        // ── ABR ──────────────────────────────────────────────────────────────
+        startLevel:              -1,
+        abrEwmaDefaultEstimate:  1_000_000,
+        abrBandWidthFactor:      0.85,
+        abrBandWidthUpFactor:    0.6,
+        testBandwidth:           false,
+
         progressive: true,
         nudgeMaxRetry: 5,
-        nudgeOffset: 0.2,
+        nudgeOffset:  0.2,
       };
 
       // ── S-Native: HTML5 <video> element (MP4, WebM, native HLS on Safari) ─
