@@ -29,8 +29,13 @@ export function useWebRTC(socket: Socket | null, localStream: MediaStream | null
   const createPeerConnection = useCallback((targetSocketId: string, initiator: boolean) => {
     if (!socket) return null;
 
-    if (peersRef.current.has(targetSocketId)) {
-      peersRef.current.get(targetSocketId)!.pc.close();
+    const existing = peersRef.current.get(targetSocketId);
+    if (existing) {
+      const state = existing.pc.iceConnectionState;
+      if (state === 'new' || state === 'checking' || state === 'connected' || state === 'completed') {
+        return existing.pc;
+      }
+      existing.pc.close();
       peersRef.current.delete(targetSocketId);
     }
 

@@ -410,7 +410,7 @@ export default function RoomPage() {
           </div>
 
           {/* Local cam — draggable, bottom-left, audio muted to avoid echo */}
-          {localStream && (
+          {localStream && localStream.getVideoTracks().length > 0 && (
             <DraggableCam
               key="local"
               stream={localStream}
@@ -422,8 +422,12 @@ export default function RoomPage() {
 
           {/* Floating draggable windows for remote peers */}
           {Array.from(remoteStreams.entries()).map(([socketId, stream]) => {
-            if (hiddenCams.has(socketId)) return null;
+            const hasVideo = stream.getVideoTracks().length > 0;
             const label = users.find(u => u.socketId === socketId)?.username || 'Peer';
+            if (!hasVideo) {
+              return <audio key={socketId} autoPlay playsInline ref={el => { if (el) el.srcObject = stream; }} style={{ display: 'none' }} />;
+            }
+            if (hiddenCams.has(socketId)) return null;
             return (
               <DraggableCam
                 key={socketId}
