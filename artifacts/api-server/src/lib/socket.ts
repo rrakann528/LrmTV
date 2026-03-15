@@ -1,6 +1,6 @@
 import { Server as HttpServer } from "http";
 import { Server, Socket } from "socket.io";
-import { db, chatMessagesTable, roomsTable, playlistItemsTable } from "@workspace/db";
+import { db, chatMessagesTable, roomsTable, playlistItemsTable, roomInvitesTable } from "@workspace/db";
 import { eq, notInArray, inArray } from "drizzle-orm";
 
 interface RoomUser {
@@ -61,6 +61,11 @@ async function deleteRoomFromDb(slug: string) {
     if (!room) return;
     await db.delete(playlistItemsTable).where(eq(playlistItemsTable.roomId, room.id));
     await db.delete(chatMessagesTable).where(eq(chatMessagesTable.roomId, room.id));
+    // Expire all pending invites for this room
+    await db
+      .update(roomInvitesTable)
+      .set({ status: "expired" })
+      .where(eq(roomInvitesTable.roomSlug, slug));
     await db.delete(roomsTable).where(eq(roomsTable.id, room.id));
     console.log(`[Room] Auto-deleted empty room: ${slug}`);
   } catch (err) {

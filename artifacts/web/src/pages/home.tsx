@@ -48,6 +48,16 @@ export default function HomePage() {
     refetchOnWindowFocus: true,
   });
 
+  // Badge: pending room invites
+  const { data: roomsBadge = 0 } = useQuery<number>({
+    queryKey: ['rooms-badge'],
+    queryFn: () => apiFetch('/invites/badge').then(r => r.json()).catch(() => 0),
+    enabled: !!user,
+    refetchInterval: 20_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+  });
+
   useEffect(() => {
     if (!loading && !user && !isGuest) setLocation('/');
   }, [user, loading, isGuest]);
@@ -126,7 +136,9 @@ export default function HomePage() {
         <div className="flex items-center justify-around px-2" style={{ height: NAV_H }}>
           {TABS.map(({ id, label, Icon }) => {
             const active = activeTab === id;
-            const badge = id === 'friends' && !active ? friendsBadge : 0;
+            const badge = id === 'friends' && !active ? friendsBadge
+                        : id === 'rooms'   && !active ? roomsBadge
+                        : 0;
             return (
               <button
                 key={id}

@@ -8,6 +8,7 @@ import {
   friendshipsTable,
   usersTable,
   roomInvitesTable,
+  roomsTable,
 } from "@workspace/db";
 import { requireAuth, type AuthRequest } from "../middlewares/auth";
 import { getIO } from "../lib/socket";
@@ -120,25 +121,43 @@ router.post("/push/test", requireAuth, async (req: AuthRequest, res): Promise<vo
 // ─── Pending room invites ─────────────────────────────────────────────────────
 router.get("/invites/pending", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const now = new Date();
+  // Join with roomsTable to only return invites for rooms that still exist
   const pending = await db
     .select({
       id: roomInvitesTable.id,
       roomSlug: roomInvitesTable.roomSlug,
       roomName: roomInvitesTable.roomName,
       senderUsername: usersTable.username,
+      senderDisplayName: usersTable.displayName,
       createdAt: roomInvitesTable.createdAt,
     })
     .from(roomInvitesTable)
     .innerJoin(usersTable, eq(usersTable.id, roomInvitesTable.senderId))
+    .innerJoin(roomsTable, eq(roomsTable.slug, roomInvitesTable.roomSlug))
     .where(and(
       eq(roomInvitesTable.receiverId, req.userId!),
       eq(roomInvitesTable.status, "pending"),
       gt(roomInvitesTable.expiresAt, now),
     ))
     .orderBy(desc(roomInvitesTable.createdAt))
-    .limit(5);
+    .limit(10);
 
   res.json(pending);
+});
+
+// ─── Invites badge count ───────────────────────────────────────────────────────
+router.get("/invites/badge", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+  const now = new Date();
+  const rows = await db
+    .select({ id: roomInvitesTable.id })
+    .from(roomInvitesTable)
+    .innerJoin(roomsTable, eq(roomsTable.slug, roomInvitesTable.roomSlug))
+    .where(and(
+      eq(roomInvitesTable.receiverId, req.userId!),
+      eq(roomInvitesTable.status, "pending"),
+      gt(roomInvitesTable.expiresAt, now),
+    ));
+  res.json(rows.length);
 });
 
 // ─── Accept / decline invite ──────────────────────────────────────────────────

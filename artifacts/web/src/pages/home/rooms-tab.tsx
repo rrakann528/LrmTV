@@ -1,13 +1,14 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Users, Play, Search, Globe, Lock, X } from 'lucide-react';
+import { Plus, Users, Play, Search, Globe, Lock, X, Mail, Check, UserCircle2 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { apiFetch } from '@/hooks/use-auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/lib/i18n';
+import { io, Socket } from 'socket.io-client';
 
 interface PublicRoom {
   id: number;
@@ -18,12 +19,25 @@ interface PublicRoom {
   createdAt: string;
 }
 
+interface RoomInvite {
+  id: number;
+  roomSlug: string;
+  roomName: string;
+  senderUsername: string;
+  senderDisplayName: string | null;
+  createdAt: string;
+}
+
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 function fetchRooms(): Promise<PublicRoom[]> {
   return fetch(`${BASE}/api/rooms`, { credentials: 'include' })
     .then(r => r.json())
     .then(data => (Array.isArray(data) ? data : []));
+}
+
+function fetchInvites(): Promise<RoomInvite[]> {
+  return apiFetch('/invites/pending').then(r => r.json()).then(d => Array.isArray(d) ? d : []);
 }
 
 function useKeyboardOffset() {
@@ -54,11 +68,49 @@ export function RoomsTab() {
   const [joinCode, setJoinCode] = useState('');
   const [createErr, setCreateErr] = useState('');
   const keyboardOffset = useKeyboardOffset();
+  const socketRef = useRef<Socket | null>(null);
 
   const { data: rooms = [], isLoading } = useQuery<PublicRoom[]>({
     queryKey: ['rooms'],
     queryFn: fetchRooms,
     refetchInterval: 5_000,
+  });
+
+  const { data: invites = [] } = useQuery<RoomInvite[]>({
+    queryKey: ['room-invites'],
+    queryFn: fetchInvites,
+    enabled: !!user,
+    refetchInterval: 15_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+  });
+
+  // Socket: listen for new room invites
+  useEffect(() => {
+    if (!user?.id) return;
+    const socket = io(`${BASE}`, {
+      path: `${BASE}/api/socket.io`,
+      transports: ['websocket', 'polling'],
+    });
+    socketRef.current = socket;
+    socket.emit('join-user-room', { userId: user.id });
+    socket.on('room-invite', () => {
+      qc.invalidateQueries({ queryKey: ['room-invites'] });
+      qc.invalidateQueries({ queryKey: ['rooms-badge'] });
+    });
+    socket.on('room-deleted', () => {
+      qc.invalidateQueries({ queryKey: ['room-invites'] });
+      qc.invalidateQueries({ queryKey: ['rooms-badge'] });
+    });
+    return () => { socket.disconnect(); };
+  }, [user?.id]);
+
+  const declineMut = useMutation({
+    mutationFn: (id: number) => apiFetch(`/invites/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'declined' }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['room-invites'] });
+      qc.invalidateQueries({ queryKey: ['rooms-badge'] });
+    },
   });
 
   const createMut = useMutation({
@@ -118,13 +170,92 @@ export function RoomsTab() {
         </div>
       </div>
 
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2">
-        <span className="text-sm font-semibold text-foreground">الغرف العامة ({filtered.length})</span>
-      </div>
-
       {/* Rooms list */}
       <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-3">
+
+        {/* ── Friend Invites Section ── */}
+        <AnimatePresence>
+          {invites.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              className="space-y-2"
+            >
+              <div className="flex items-center gap-2 pt-1">
+                <Mail className="w-4 h-4 text-primary" />
+                <span className="text-sm font-bold text-foreground">
+                  دعوات الأصدقاء ({invites.length})
+                </span>
+              </div>
+
+              {invites.map((inv, i) => {
+                const senderName = inv.senderDisplayName || inv.senderUsername;
+                return (
+                  <motion.div
+                    key={inv.id}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 20 }}
+                    transition={{ delay: i * 0.05 }}
+                    className="flex items-center gap-3 bg-primary/8 border border-primary/20 rounded-2xl p-3"
+                  >
+                    {/* Icon */}
+                    <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center shrink-0">
+                      <UserCircle2 className="w-5 h-5 text-primary" />
+                    </div>
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm text-foreground truncate">
+                        {inv.roomName}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        دعاك <span className="text-primary font-medium">{senderName}</span> للانضمام
+                      </p>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex gap-1.5 shrink-0">
+                      <button
+                        onClick={() => {
+                          declineMut.mutate(inv.id);
+                          qc.invalidateQueries({ queryKey: ['room-invites'] });
+                        }}
+                        disabled={declineMut.isPending}
+                        className="w-8 h-8 rounded-xl bg-muted/60 flex items-center justify-center active:scale-90 transition-all"
+                        title="رفض"
+                      >
+                        <X className="w-4 h-4 text-muted-foreground" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          // Mark as accepted then join
+                          apiFetch(`/invites/${inv.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'accepted' }) });
+                          qc.invalidateQueries({ queryKey: ['room-invites'] });
+                          qc.invalidateQueries({ queryKey: ['rooms-badge'] });
+                          setLocation(`/room/${inv.roomSlug}`);
+                        }}
+                        className="flex items-center gap-1 px-3 h-8 rounded-xl bg-primary text-primary-foreground text-xs font-bold active:scale-90 transition-all"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        دخول
+                      </button>
+                    </div>
+                  </motion.div>
+                );
+              })}
+
+              <div className="border-t border-border/50 pt-1" />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ── Rooms List ── */}
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-semibold text-foreground">الغرف العامة ({filtered.length})</span>
+        </div>
+
         {isLoading ? (
           Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="h-20 bg-muted/40 rounded-2xl animate-pulse" />
@@ -179,7 +310,7 @@ export function RoomsTab() {
         <Plus className="w-7 h-7 text-primary-foreground" />
       </motion.button>
 
-      {/* Create Room Modal — rendered via portal to escape Framer Motion transform context */}
+      {/* Create Room Modal */}
       {createPortal(
         <AnimatePresence>
           {showCreate && (

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, asc, and } from "drizzle-orm";
-import { db, roomsTable, playlistItemsTable, chatMessagesTable } from "@workspace/db";
+import { db, roomsTable, playlistItemsTable, chatMessagesTable, roomInvitesTable } from "@workspace/db";
 import { getActiveRooms, kickRoom } from "../lib/socket";
 import { requireAuth, type AuthRequest } from "../middlewares/auth";
 import {
@@ -313,6 +313,11 @@ router.delete("/rooms/:slug", requireAuth, async (req: AuthRequest, res): Promis
 
   await db.delete(playlistItemsTable).where(eq(playlistItemsTable.roomId, room.id));
   await db.delete(chatMessagesTable).where(eq(chatMessagesTable.roomId, room.id));
+  // Expire all pending invites for this room
+  await db
+    .update(roomInvitesTable)
+    .set({ status: "expired" })
+    .where(eq(roomInvitesTable.roomSlug, slug));
   await db.delete(roomsTable).where(eq(roomsTable.id, room.id));
 
   kickRoom(slug);
