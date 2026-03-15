@@ -144,6 +144,10 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
     const dashRef  = useRef<{ destroy: () => void } | null>(null);
     const reconnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const forceProxyFnRef = useRef<(() => void) | null>(null);
+    // Prevents stall-recovery nudges from emitting a seek event to the whole room
+    const isInternalNudgeRef = useRef(false);
+    // Debounces the buffering spinner (avoids 1-frame flicker on seek)
+    const bufferingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     // Keep latest onReady in a ref so closures inside useEffect always call the current prop
     const onReadyRef = useRef(onReady);
     useEffect(() => { onReadyRef.current = onReady; }, [onReady]);
@@ -297,18 +301,37 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
       setBuffering(true);
       let cancelled = false;
 
-      // Clear buffering spinner and signal ready once the browser has buffered enough to play.
-      // Firing signalReady() here (instead of MANIFEST_PARSED) ensures:
-      //   • The buffer is actually ready at the join position before we tell room we're ready
-      //   • Only ONE seek happens (via startPosition in HLS config), no duplicate seeks
-      //   • readyFiredRef prevents double-firing for native players (loadedmetadata + canplay)
-      const onCanPlay = () => {
-        if (!cancelled) {
-          setBuffering(false);
-          signalReady(); // no-op if already fired by native loadedmetadata path
-        }
+      // Helper: show buffering spinner with a debounce so 1-frame glitches don't flicker
+      const showBuffering = () => {
+        if (bufferingTimerRef.current) return; // already pending
+        bufferingTimerRef.current = setTimeout(() => {
+          bufferingTimerRef.current = null;
+          if (!cancelled) setBuffering(true);
+        }, 400);
       };
-      video.addEventListener('canplay', onCanPlay);
+      const hideBuffering = () => {
+        if (bufferingTimerRef.current) { clearTimeout(bufferingTimerRef.current); bufferingTimerRef.current = null; }
+        setBuffering(false);
+      };
+
+      // Clear buffering spinner and signal ready once the browser has buffered enough to play.
+      const onCanPlay = () => { if (!cancelled) { hideBuffering(); signalReady(); } };
+      // Also clear when frames actually start rendering (belt-and-suspenders)
+      const onPlaying  = () => { if (!cancelled) hideBuffering(); };
+      // Show spinner only after a 400 ms delay to avoid flicker on tiny rebuffers
+      const onWaiting  = () => { if (!cancelled) showBuffering(); };
+      // Network fetch stalled → kick HLS/native to restart
+      const onStalled  = () => {
+        if (cancelled) return;
+        showBuffering();
+        if (hlsRef.current) { try { hlsRef.current.startLoad(); } catch { /* ignore */ } }
+        else if (!video.paused) { video.load(); video.play().catch(() => {}); }
+      };
+
+      video.addEventListener('canplay',  onCanPlay);
+      video.addEventListener('playing',  onPlaying);
+      video.addEventListener('waiting',  onWaiting);
+      video.addEventListener('stalled',  onStalled);
 
       // Called once the player has loaded enough to seek — seeks to initialTime if needed, then fires onReady.
       // When called from canplay (HLS path), startPosition has already positioned the player correctly,
@@ -372,10 +395,11 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
         maxLiveSyncPlaybackRate:   1.1,
 
         // ── Buffer ───────────────────────────────────────────────────────────
-        // 20 s forward buffer is plenty for live; 60 s max ceiling keeps VOD smooth
-        backBufferLength:   6,
-        maxBufferLength:    20,
-        maxMaxBufferLength: 60,
+        // Larger forward buffer → fewer stalls on slow networks or after resuming from background.
+        // Larger back-buffer → smoother scrubbing backward without re-fetching.
+        backBufferLength:   30,
+        maxBufferLength:    30,
+        maxMaxBufferLength: 90,
 
         // ── Retry / timeout ──────────────────────────────────────────────────
         manifestLoadingMaxRetry:   1,
@@ -467,7 +491,7 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
         setError('proxy-required');
       };
 
-      // ── Stall watchdog — detects frozen playback and nudges forward ─────────
+      // ── Stall watchdog — detects frozen playback and recovers ───────────────
       let stallWatchdog: ReturnType<typeof setInterval> | null = null;
       const startStallWatchdog = () => {
         if (stallWatchdog) clearInterval(stallWatchdog);
@@ -476,21 +500,30 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
         stallWatchdog = setInterval(() => {
           if (cancelled || !video || video.paused || video.ended) return;
           const now = video.currentTime;
-          // Only fire on readyState < 3 (no future data at all) to avoid false positives
+          // Only fire when no data is available (readyState < 3) to avoid false positives
           if (now === lastTime && video.readyState < 3) {
             stalledFor += 1;
-            if (stalledFor >= 5) {  // 10 seconds of true stall before acting
+            if (stalledFor >= 2) {  // 4 s of true stall → act immediately
               stalledFor = 0;
               const buf = video.buffered;
-              if (buf.length > 0) {
-                const ahead = buf.end(buf.length - 1) - now;
-                if (ahead > 0.5) {
-                  video.currentTime = now + 0.1;
-                } else if (hlsRef.current) {
-                  hlsRef.current.startLoad();
-                }
+              const ahead = buf.length > 0 ? buf.end(buf.length - 1) - now : 0;
+              if (ahead > 0.5) {
+                // Buffer is there but video froze — nudge past the frozen frame.
+                // Set the internal flag so onSeeked doesn't broadcast this to the room.
+                isInternalNudgeRef.current = true;
+                video.currentTime = now + 0.1;
+                setTimeout(() => { isInternalNudgeRef.current = false; }, 200);
               } else if (hlsRef.current) {
-                hlsRef.current.startLoad();
+                // No buffer ahead — kick HLS.js to load more segments
+                try { hlsRef.current.startLoad(); } catch { /* ignore */ }
+              } else if (dashRef.current) {
+                // DASH: nothing to do, player auto-recovers
+              } else {
+                // Native video stall — try reload from current position
+                const t = video.currentTime;
+                video.load();
+                video.currentTime = t;
+                video.play().catch(() => {});
               }
             }
           } else {
@@ -508,15 +541,26 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
         hls.on(Hls.Events.ERROR, (_, d) => {
           if (cancelled) return;
           if (!d.fatal) {
-            if (d.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
+            // Non-fatal errors are handled by HLS.js internally — do NOT call recoverMediaError()
+            // on non-fatal errors as it triggers an unnecessary rebuffer cycle.
+            // For non-fatal network errors, just let HLS.js retry via its built-in retry logic.
             return;
           }
-          if (d.type === Hls.ErrorTypes.MEDIA_ERROR && mediaErrCount < 3) {
+          if (d.type === Hls.ErrorTypes.MEDIA_ERROR && mediaErrCount < 4) {
             mediaErrCount++;
-            setTimeout(() => { if (!cancelled) hls.recoverMediaError(); }, 500);
+            if (mediaErrCount === 1) {
+              // First attempt: soft recovery (stops and restarts the codec)
+              hls.recoverMediaError();
+            } else if (mediaErrCount === 2) {
+              // Second attempt: swap audio codec, then recover
+              setTimeout(() => { if (!cancelled) { hls.swapAudioCodec(); hls.recoverMediaError(); } }, 300);
+            } else {
+              // Subsequent: full reload of segments
+              setTimeout(() => { if (!cancelled) { hls.stopLoad(); hls.startLoad(); } }, 500);
+            }
             return;
           }
-          if (d.type === Hls.ErrorTypes.NETWORK_ERROR && netErrCount < 2) {
+          if (d.type === Hls.ErrorTypes.NETWORK_ERROR && netErrCount < 3) {
             // CORS / blocked request: response code 0 → fail immediately, don't retry
             const isCorsBlock = !d.response?.code || d.response.code === 0;
             if (isCorsBlock) {
@@ -527,7 +571,8 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
               return;
             }
             netErrCount++;
-            setTimeout(() => { if (!cancelled) hls.startLoad(); }, 2000);
+            const delay = netErrCount * 1500; // 1.5s, 3s, 4.5s
+            setTimeout(() => { if (!cancelled) hls.startLoad(); }, delay);
             return;
           }
           hls.destroy();
@@ -689,14 +734,32 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
         else                                        loadViaHls();
       };
 
+      // ── Network-back recovery: restart loading when device comes back online ──
+      const onOnline = () => {
+        if (cancelled) return;
+        setTimeout(() => {
+          if (cancelled) return;
+          if (hlsRef.current) { try { hlsRef.current.startLoad(); } catch { /* ignore */ } }
+          else if (video && !video.paused && video.readyState < 3) {
+            video.play().catch(() => {});
+          }
+        }, 1000);
+      };
+      window.addEventListener('online', onOnline);
+
       run();
 
       return () => {
         cancelled = true;
+        if (bufferingTimerRef.current) { clearTimeout(bufferingTimerRef.current); bufferingTimerRef.current = null; }
         if (reconnTimerRef.current) { clearTimeout(reconnTimerRef.current); reconnTimerRef.current = null; }
         if (stallWatchdog) { clearInterval(stallWatchdog); stallWatchdog = null; }
         video.removeEventListener('durationchange', onDurationChange);
-        video.removeEventListener('canplay', onCanPlay);
+        video.removeEventListener('canplay',  onCanPlay);
+        video.removeEventListener('playing',  onPlaying);
+        video.removeEventListener('waiting',  onWaiting);
+        video.removeEventListener('stalled',  onStalled);
+        window.removeEventListener('online',  onOnline);
         destroyAll();
       };
     }, [src, retryKey]);
@@ -846,7 +909,11 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
           referrerPolicy="no-referrer"
           onPlay={() => { setAutoplayBlocked(false); setError(null); onPlay?.(); }}
           onPause={onPause}
-          onSeeked={() => { if (videoRef.current) onSeek?.(videoRef.current.currentTime); }}
+          onSeeked={() => {
+            // Skip broadcasting nudges used by the stall-recovery watchdog
+            if (isInternalNudgeRef.current) return;
+            if (videoRef.current) onSeek?.(videoRef.current.currentTime);
+          }}
         />
 
         {/* Custom subtitle overlay */}
