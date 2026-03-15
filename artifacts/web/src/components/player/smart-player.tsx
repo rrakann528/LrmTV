@@ -518,7 +518,15 @@ export const SmartPlayer = forwardRef<SmartPlayerHandle, SmartPlayerProps>(
                     >
                       <SkipForward className="w-5 h-5" />
                     </button>
-                    {/* Volume */}
+                    {rpDuration > 0 && (
+                      <span className="hidden sm:inline text-[11px] text-white/60 font-mono ms-0.5 tabular-nums">
+                        {formatTime(rpCurrentTime)} / {formatTime(rpDuration)}
+                      </span>
+                    )}
+                  </div>
+                  {/* ── RIGHT: Volume · Chat · Fullscreen ── */}
+                  {/* Volume is outside the canControl blocker so ALL users can mute/unmute */}
+                  <div className="flex items-center">
                     <button
                       className="p-2.5 text-white hover:bg-white/10 rounded-full transition"
                       onClick={() => {
@@ -541,14 +549,6 @@ export const SmartPlayer = forwardRef<SmartPlayerHandle, SmartPlayerProps>(
                           : <Volume2 className="w-5 h-5" />
                       }
                     </button>
-                    {rpDuration > 0 && (
-                      <span className="hidden sm:inline text-[11px] text-white/60 font-mono ms-0.5 tabular-nums">
-                        {formatTime(rpCurrentTime)} / {formatTime(rpDuration)}
-                      </span>
-                    )}
-                  </div>
-                  {/* ── RIGHT: Chat · Fullscreen ── */}
-                  <div className="flex items-center">
                     <button
                       className={cn('p-2.5 text-white hover:bg-white/10 rounded-full transition', isChatOpen && 'text-primary bg-white/10')}
                       onClick={handleToggleChatReactPlayer}
