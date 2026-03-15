@@ -539,6 +539,7 @@ export default function RoomPage() {
                   chatDisabled={chatDisabled}
                   isAdmin={isAdmin}
                   isGuest={isGuest}
+                  users={users}
                 />
               )}
               {activeTab === 'playlist' && (

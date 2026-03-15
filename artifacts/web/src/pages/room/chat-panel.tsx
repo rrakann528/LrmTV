@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Smile, MessageSquareOff } from 'lucide-react';
 import { useGetRoomMessages } from '@workspace/api-client-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { UserProfileSheet } from '@/components/user-profile-sheet';
 import { generateColorFromString, cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { format } from 'date-fns';
+import type { RoomUser } from '@/hooks/use-socket';
 
 const EmojiPicker = lazy(() => import('emoji-picker-react'));
 
@@ -29,9 +31,13 @@ interface ChatPanelProps {
   chatDisabled?: boolean;
   isAdmin?: boolean;
   isGuest?: boolean;
+  users?: RoomUser[];
 }
 
-export default function ChatPanel({ slug, emitChatMessage, username, liveMessages, chatDisabled, isAdmin, isGuest }: ChatPanelProps) {
+export default function ChatPanel({
+  slug, emitChatMessage, username, liveMessages,
+  chatDisabled, isAdmin, isGuest, users = [],
+}: ChatPanelProps) {
   const { t, lang } = useI18n();
   const inputBlocked = (chatDisabled && !isAdmin) || isGuest;
   const { data: history } = useGetRoomMessages(slug);
@@ -39,6 +45,7 @@ export default function ChatPanel({ slug, emitChatMessage, username, liveMessage
   const [input, setInput] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [profileTarget, setProfileTarget] = useState<{ username: string; userId?: number } | null>(null);
 
   useEffect(() => {
     if (history) {
@@ -73,29 +80,37 @@ export default function ChatPanel({ slug, emitChatMessage, username, liveMessage
 
   useEffect(() => {
     if (scrollRef.current) {
-      // Use scrollIntoView on a sentinel instead of setting scrollTop
-      // — faster and triggers native smooth scrolling
-      const el = scrollRef.current;
-      el.scrollTop = el.scrollHeight;
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages.length]);
 
+  const openProfile = (msgUsername: string) => {
+    const roomUser = users.find(u => u.username === msgUsername);
+    setProfileTarget({ username: msgUsername, userId: roomUser?.userId });
+  };
+
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
       className="flex flex-col h-full bg-black/20"
     >
-      <div className="flex-grow overflow-y-auto p-4 flex flex-col gap-4" ref={scrollRef}>
+      {/* Messages area */}
+      <div className="flex-grow overflow-y-auto px-3 py-3 flex flex-col gap-1" ref={scrollRef}>
         {messages.map((msg, i) => {
           const isMe = msg.username === username;
           const isSystem = msg.type === 'system';
-          
+          const prevMsg = messages[i - 1];
+          const nextMsg = messages[i + 1];
+
+          const isFirstInGroup = !prevMsg || prevMsg.type === 'system' || prevMsg.username !== msg.username;
+          const isLastInGroup  = !nextMsg || nextMsg.type === 'system'  || nextMsg.username !== msg.username;
+
           if (isSystem) {
             return (
-              <div key={msg.id || i} className="flex justify-center">
-                <span className="bg-white/10 px-3 py-1 rounded-full text-xs text-white/60">
+              <div key={msg.id || i} className="flex justify-center my-2">
+                <span className="bg-white/10 px-3 py-1 rounded-full text-xs text-white/50">
                   {msg.content}
                 </span>
               </div>
@@ -103,28 +118,74 @@ export default function ChatPanel({ slug, emitChatMessage, username, liveMessage
           }
 
           return (
-            <div key={msg.id || i} className={cn("flex flex-col max-w-[85%]", isMe ? "self-start items-start" : "self-end items-end")}>
-              <div className={cn("flex items-end gap-2", !isMe && "flex-row-reverse")}>
-                {!isMe && (
-                  <div 
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 shadow-lg"
-                    style={{ backgroundColor: generateColorFromString(msg.username) }}
+            <div
+              key={msg.id || i}
+              className={cn(
+                'flex items-end gap-2',
+                isMe ? 'flex-row-reverse' : 'flex-row',
+                isFirstInGroup ? 'mt-2' : 'mt-0.5',
+              )}
+            >
+              {/* Avatar — only on last message of group, for others */}
+              {!isMe && (
+                <div className="w-8 shrink-0 flex items-end">
+                  {isLastInGroup ? (
+                    <button
+                      onClick={() => openProfile(msg.username)}
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white shadow-lg active:scale-95 transition-transform shrink-0"
+                      style={{ backgroundColor: generateColorFromString(msg.username) }}
+                    >
+                      {msg.username.substring(0, 2).toUpperCase()}
+                    </button>
+                  ) : (
+                    <div className="w-8 h-8" />
+                  )}
+                </div>
+              )}
+
+              {/* Bubble + name */}
+              <div className={cn('flex flex-col max-w-[75%]', isMe ? 'items-end' : 'items-start')}>
+                {/* Sender name — only on first message of group */}
+                {!isMe && isFirstInGroup && (
+                  <button
+                    onClick={() => openProfile(msg.username)}
+                    className="text-[11px] font-bold mb-1 px-1 active:opacity-70 transition-opacity"
+                    style={{ color: generateColorFromString(msg.username) }}
                   >
-                    {msg.username.substring(0, 2).toUpperCase()}
-                  </div>
+                    {msg.username}
+                  </button>
                 )}
-                
-                <div className={cn(
-                  "px-4 py-2 rounded-2xl text-sm shadow-md",
-                  isMe ? "bg-primary text-primary-foreground rounded-bl-sm" : "bg-white/10 text-white rounded-br-sm border border-white/5"
-                )}>
-                  {!isMe && <div className="text-[10px] font-bold text-white/50 mb-1">{msg.username}</div>}
+
+                {/* Message bubble */}
+                <div
+                  className={cn(
+                    'px-3 py-2 text-sm break-words',
+                    isMe
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-white/10 text-white border border-white/8',
+                    isMe ? (
+                      isFirstInGroup && isLastInGroup ? 'rounded-2xl rounded-ee-sm'
+                      : isFirstInGroup                ? 'rounded-2xl rounded-ee-sm rounded-es-2xl'
+                      : isLastInGroup                 ? 'rounded-2xl rounded-es-2xl rounded-ss-2xl'
+                      :                                 'rounded-2xl rounded-ss-2xl rounded-es-2xl'
+                    ) : (
+                      isFirstInGroup && isLastInGroup ? 'rounded-2xl rounded-ss-sm'
+                      : isFirstInGroup                ? 'rounded-2xl rounded-ss-sm rounded-se-2xl'
+                      : isLastInGroup                 ? 'rounded-2xl rounded-se-2xl rounded-ee-2xl'
+                      :                                 'rounded-2xl rounded-se-2xl rounded-ee-2xl'
+                    ),
+                  )}
+                >
                   {msg.content}
                 </div>
+
+                {/* Timestamp — only on last message of group */}
+                {isLastInGroup && (
+                  <span className="text-[10px] text-white/30 mt-1 px-1">
+                    {format(new Date(msg.createdAt), 'HH:mm')}
+                  </span>
+                )}
               </div>
-              <span className="text-[10px] text-white/40 mt-1 px-1">
-                {format(new Date(msg.createdAt), 'HH:mm')}
-              </span>
             </div>
           );
         })}
@@ -132,52 +193,82 @@ export default function ChatPanel({ slug, emitChatMessage, username, liveMessage
 
       {/* Chat disabled banner */}
       {chatDisabled && (
-        <div className={`flex items-center gap-2 px-4 py-2 text-xs font-medium border-t ${isAdmin ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' : 'bg-red-500/10 border-red-500/20 text-red-400'}`}>
+        <div className={`flex items-center gap-2 px-4 py-2 text-xs font-medium border-t ${
+          isAdmin
+            ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+            : 'bg-red-500/10 border-red-500/20 text-red-400'
+        }`}>
           <MessageSquareOff className="w-3.5 h-3.5 shrink-0" />
           {isAdmin
-            ? ((lang === 'ar') ? 'الدردشة معطلة — أنت المضيف ويمكنك الكتابة' : 'Chat is disabled — you can still write as host')
-            : ((lang === 'ar') ? 'الدردشة معطّلة من المضيف' : 'Chat has been disabled by the host')}
+            ? (lang === 'ar' ? 'الدردشة معطلة — أنت المضيف ويمكنك الكتابة' : 'Chat is disabled — you can still write as host')
+            : (lang === 'ar' ? 'الدردشة معطّلة من المضيف' : 'Chat has been disabled by the host')}
         </div>
       )}
 
+      {/* Input area */}
       <div className="p-3 bg-black/40 border-t border-white/10 relative">
         {showEmoji && !inputBlocked && (
           <div className="absolute bottom-full right-4 mb-2 z-50">
-            <Suspense fallback={<div className="w-[300px] h-[400px] rounded-xl bg-zinc-900 flex items-center justify-center"><div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin" /></div>}>
+            <Suspense fallback={
+              <div className="w-[300px] h-[400px] rounded-xl bg-zinc-900 flex items-center justify-center">
+                <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+              </div>
+            }>
               <EmojiPicker theme={"dark" as any} onEmojiClick={handleEmojiClick} />
             </Suspense>
           </div>
         )}
-        
-        <form onSubmit={inputBlocked ? e => e.preventDefault() : handleSubmit} className="flex gap-2 relative">
-          <Button 
+
+        <form
+          onSubmit={inputBlocked ? e => e.preventDefault() : handleSubmit}
+          className="flex gap-2 relative"
+        >
+          <Button
             type="button"
-            variant="ghost" 
-            size="icon" 
+            variant="ghost"
+            size="icon"
             disabled={inputBlocked}
             className="absolute start-1 top-1 text-white/50 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
             onClick={() => !inputBlocked && setShowEmoji(!showEmoji)}
           >
             <Smile className="w-5 h-5" />
           </Button>
-          
-          <Input 
+
+          <Input
             value={input}
             onChange={e => !inputBlocked && setInput(e.target.value)}
             disabled={inputBlocked}
             className="ps-10 rounded-full bg-white/5 border-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
-            placeholder={isGuest
-              ? ((lang === 'ar') ? 'سجّل دخولك للمشاركة في الدردشة' : 'Sign in to chat')
-              : inputBlocked
-                ? ((lang === 'ar') ? 'الدردشة معطّلة...' : 'Chat is disabled...')
-                : t('typeMessage')}
+            placeholder={
+              isGuest
+                ? (lang === 'ar' ? 'سجّل دخولك للمشاركة في الدردشة' : 'Sign in to chat')
+                : inputBlocked
+                ? (lang === 'ar' ? 'الدردشة معطّلة...' : 'Chat is disabled...')
+                : t('typeMessage')
+            }
           />
-          
-          <Button type="submit" size="icon" disabled={inputBlocked} className="rounded-full shrink-0 disabled:opacity-30 disabled:cursor-not-allowed">
+
+          <Button
+            type="submit"
+            size="icon"
+            disabled={inputBlocked}
+            className="rounded-full shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
+          >
             <Send className="w-4 h-4" />
           </Button>
         </form>
       </div>
+
+      {/* User Profile Sheet */}
+      <AnimatePresence>
+        {profileTarget && (
+          <UserProfileSheet
+            username={profileTarget.username}
+            userId={profileTarget.userId}
+            onClose={() => setProfileTarget(null)}
+          />
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
