@@ -62,7 +62,7 @@ export default function RoomPage() {
     emitSync, emitSeek, emitChatMessage,
     toggleLock, toggleAllowGuests, toggleDJ, changeBackground, renameRoom, toggleMedia, emitPlaylistUpdate, requestSync,
     kickUser, transferAdmin, togglePrivacy, toggleChat, toggleMic, toggleCamera,
-    subtitleSync, emitSubtitleSync,
+    subtitleSync, emitSubtitleSync, emitStreamType,
   } = useSocket(slug);
 
   const [activeTab, setActiveTab] = useState<'chat' | 'playlist' | 'users' | 'friends'>('chat');
@@ -161,8 +161,15 @@ export default function RoomPage() {
   // initial:   threshold=Infinity — signalReady() inside HlsPlayer handles the initial
   //            seek via startPosition + canplay; the sync effect must not interfere.
   //            After the 10-second grace period, fall back to heartbeat-level threshold.
+  // live:      NEVER seek by time — everyone joins at the live edge naturally.
+  //            Only play/pause state is synced; HLS.js keeps all viewers at live edge.
   useEffect(() => {
     if (!playerRef.current || isSeeking || !playerReady) return;
+
+    // For live streams, skip ALL time-based seeks.
+    // The live edge is maintained automatically by HLS.js's liveSyncDurationCount setting.
+    // Seeking to a specific computedTime in a live sliding window causes buffer stalls.
+    if (syncState.isLive) return;
 
     const playerTime = playerRef.current.getCurrentTime() || 0;
     const diff = Math.abs(playerTime - syncState.time);
@@ -179,7 +186,7 @@ export default function RoomPage() {
       setTimeout(() => { isRemoteSeekRef.current = false; }, 600);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [syncState.time, syncState.playing, syncState.source, isSeeking, playerReady]);
+  }, [syncState.time, syncState.playing, syncState.source, syncState.isLive, isSeeking, playerReady]);
 
   const doEnableMic = useCallback(async () => {
     setMicOn(true);
@@ -388,6 +395,8 @@ export default function RoomPage() {
                 controls={canControl}
                 canControl={canControl}
                 initialTime={syncState.time}
+                isLiveHint={syncState.isLive}
+                onIsLive={emitStreamType}
                 onReady={() => { readyTimeRef.current = Date.now(); setPlayerReady(true); }}
                 onPlay={handlePlay}
                 onPause={handlePause}

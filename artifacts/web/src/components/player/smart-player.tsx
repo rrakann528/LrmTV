@@ -65,6 +65,10 @@ interface SmartPlayerProps {
   lang?: 'en' | 'ar';
   onSubtitleApplied?: (payload: { type: 'url' | 'content' | 'clear'; url?: string; content?: string; label?: string; from: string }) => void;
   externalSubtitle?: { type: 'url' | 'content' | 'clear'; url?: string; content?: string; label?: string; from: string } | null;
+  /** Hint from server that the current stream is live — skip time-based startPosition */
+  isLiveHint?: boolean;
+  /** Fired when HLS manifest is parsed and live/VOD status is known */
+  onIsLive?: (isLive: boolean) => void;
 }
 
 export const SmartPlayer = forwardRef<SmartPlayerHandle, SmartPlayerProps>(
@@ -86,6 +90,8 @@ export const SmartPlayer = forwardRef<SmartPlayerHandle, SmartPlayerProps>(
       lang = 'en',
       onSubtitleApplied,
       externalSubtitle,
+      isLiveHint = false,
+      onIsLive,
     },
     ref,
   ) => {
@@ -275,6 +281,8 @@ export const SmartPlayer = forwardRef<SmartPlayerHandle, SmartPlayerProps>(
             lang={lang}
             onSubtitleApplied={onSubtitleApplied}
             externalSubtitle={externalSubtitle}
+            isLiveHint={isLiveHint}
+            onIsLive={onIsLive}
           />
         </div>
       );

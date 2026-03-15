@@ -21,6 +21,8 @@ export interface SyncState {
   updatedAt: number;
   url: string | null;
   source: 'initial' | 'action' | 'heartbeat';
+  /** True when the server knows the current stream is a live broadcast */
+  isLive: boolean;
 }
 
 interface ChatMessageData {
@@ -39,7 +41,7 @@ export function useSocket(slug: string | null) {
   const [connected, setConnected] = useState(false);
   const [users, setUsers] = useState<RoomUser[]>([]);
   const [you, setYou] = useState<RoomUser | null>(null);
-  const [syncState, setSyncState] = useState<SyncState>({ playing: false, time: 0, updatedAt: Date.now(), url: null, source: 'initial' });
+  const [syncState, setSyncState] = useState<SyncState>({ playing: false, time: 0, updatedAt: Date.now(), url: null, source: 'initial', isLive: false });
   const [isLocked, setIsLocked] = useState(false);
   const [allowGuestControl, setAllowGuestControl] = useState(false);
   const [background, setBackground] = useState<string>('default');
@@ -102,6 +104,7 @@ export function useSocket(slug: string | null) {
       roomName?: string;
       users: RoomUser[];
       you: RoomUser;
+      isLive?: boolean;
     }) => {
       setUsers(state.users || []);
       setYou(state.you);
@@ -111,6 +114,7 @@ export function useSocket(slug: string | null) {
         updatedAt: Date.now(),
         url: state.currentVideo,
         source: 'initial',
+        isLive: state.isLive ?? false,
       });
       setIsLocked(state.isLocked || false);
       setAllowGuestControl(state.allowGuestControl || false);
@@ -197,11 +201,12 @@ export function useSocket(slug: string | null) {
     });
 
     // Periodic heartbeat — gentle drift correction only (big gaps, not small drifts)
-    socket.on('heartbeat', (data: { currentTime: number; isPlaying: boolean }) => {
+    socket.on('heartbeat', (data: { currentTime: number; isPlaying: boolean; isLive?: boolean }) => {
       setSyncState(prev => ({
         ...prev,
         time: data.currentTime,
         playing: data.isPlaying,
+        isLive: data.isLive ?? prev.isLive,
         updatedAt: Date.now(),
         source: 'heartbeat',
       }));
@@ -373,6 +378,12 @@ export function useSocket(slug: string | null) {
     }
   }, []);
 
+  const emitStreamType = useCallback((isLive: boolean) => {
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('stream-type', { isLive });
+    }
+  }, []);
+
   return {
     socket: socketRef.current,
     connected,
@@ -408,5 +419,6 @@ export function useSocket(slug: string | null) {
     toggleCamera,
     subtitleSync,
     emitSubtitleSync,
+    emitStreamType,
   };
 }

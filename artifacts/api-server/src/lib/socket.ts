@@ -40,6 +40,8 @@ interface RoomState {
   chatDisabled: boolean;
   micDisabled: boolean;
   cameraDisabled: boolean;
+  /** True when the current video is a live stream (no time-based sync for guests) */
+  isLive: boolean;
   /** Current subtitle state broadcast to late joiners */
   subtitle: SubtitleSync | null;
   /** Permanent admin — the user who created/first-joined the room. Restored on rejoin. */
@@ -150,6 +152,7 @@ function createRoomState(slug: string, roomId: number, roomName: string): RoomSt
     chatDisabled: false,
     micDisabled: false,
     cameraDisabled: false,
+    isLive: false,
     subtitle: null,
   };
   rooms.set(slug, state);
@@ -273,6 +276,7 @@ export function initSocketServer(httpServer: HttpServer): Server {
         chatDisabled: roomState.chatDisabled,
         micDisabled: roomState.micDisabled,
         cameraDisabled: roomState.cameraDisabled,
+        isLive: roomState.isLive,
         subtitle: roomState.subtitle,
       });
 
@@ -336,6 +340,7 @@ export function initSocketServer(httpServer: HttpServer): Server {
           roomState.currentVideo = data.url || null;
           roomState.currentTime = 0;
           roomState.isPlaying = true;
+          roomState.isLive = false; // reset — player will re-detect after manifest load
           roomState.lastSyncTimestamp = Date.now();
           startHeartbeat(io, roomState);
           break;
@@ -574,6 +579,15 @@ export function initSocketServer(httpServer: HttpServer): Server {
       io.to(currentRoomSlug).emit("room-renamed", { name: newName });
     });
 
+    // ── Stream type (live vs VOD) — emitted by any player after manifest load ─
+    // Lets late-joiners know to start at live edge instead of a specific time.
+    socket.on("stream-type", (data: { isLive: boolean }) => {
+      if (!currentRoomSlug) return;
+      const roomState = getRoomState(currentRoomSlug);
+      if (!roomState) return;
+      roomState.isLive = data.isLive === true;
+    });
+
     // ── WebRTC ────────────────────────────────────────────────────────────────
     socket.on("webrtc-signal", (data: { targetSocketId: string; signal: any; type: string; fresh?: boolean }) => {
       io.to(data.targetSocketId).emit("webrtc-signal", {
@@ -723,7 +737,11 @@ function startHeartbeat(io: Server, state: RoomState) {
   stopHeartbeat(state);
   state.heartbeatTimer = setInterval(() => {
     if (!state.isPlaying || state.users.size === 0) { stopHeartbeat(state); return; }
-    io.to(state.slug).emit("heartbeat", { currentTime: computedTime(state), isPlaying: true });
+    io.to(state.slug).emit("heartbeat", {
+      currentTime: computedTime(state),
+      isPlaying: true,
+      isLive: state.isLive,
+    });
   }, 5000);
 }
 

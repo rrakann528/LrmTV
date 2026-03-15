@@ -97,6 +97,14 @@ interface HlsPlayerProps {
   onSubtitleApplied?: (payload: SubtitleSyncPayload) => void;
   /** Incoming subtitle from a room peer — apply silently */
   externalSubtitle?: SubtitleSyncPayload | null;
+  /**
+   * Hint from the room server that the current stream is a live broadcast.
+   * When true, startPosition is set to -1 (live edge) instead of a specific timestamp,
+   * preventing the guest player from trying to seek to an exact position in the sliding window.
+   */
+  isLiveHint?: boolean;
+  /** Fired after the manifest loads and live/VOD status is determined */
+  onIsLive?: (isLive: boolean) => void;
 }
 
 export interface HlsPlayerHandle {
@@ -126,6 +134,8 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
       lang = 'en',
       onSubtitleApplied,
       externalSubtitle,
+      isLiveHint = false,
+      onIsLive,
     },
     ref,
   ) => {
@@ -137,6 +147,9 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
     // Keep latest onReady in a ref so closures inside useEffect always call the current prop
     const onReadyRef = useRef(onReady);
     useEffect(() => { onReadyRef.current = onReady; }, [onReady]);
+    // Keep latest onIsLive in a ref
+    const onIsLiveRef = useRef(onIsLive);
+    useEffect(() => { onIsLiveRef.current = onIsLive; }, [onIsLive]);
     // Keep latest initialTime in a ref so signalReady always uses the most up-to-date position
     const initialTimeRef = useRef(initialTime);
     useEffect(() => { initialTimeRef.current = initialTime; }, [initialTime]);
@@ -305,7 +318,10 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
 
       // Capture startPosition at load time — tells HLS.js to begin fetching
       // from this position directly instead of starting at 0 then seeking.
-      const startPos = initialTimeRef.current > 2 ? initialTimeRef.current : -1;
+      // For live streams (isLiveHint=true), always start at the live edge (-1).
+      // Seeking to a specific time in the live sliding window causes buffering
+      // because computedTime may overshoot the available segment window.
+      const startPos = isLiveHint ? -1 : (initialTimeRef.current > 2 ? initialTimeRef.current : -1);
 
       const HLS_CONFIG: Partial<Hls['config']> = {
         enableWorker: true,
@@ -365,6 +381,7 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
           if (!cancelled) {
             const live = !isFinite(video.duration) || video.duration === Infinity;
             isLiveRef.current = live; setIsLive(live);
+            onIsLiveRef.current?.(live);
             setStatusMsg(null); setError(null); signalReady();
           }
         };
@@ -495,6 +512,8 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
             const live = !d || !isFinite(d) || d === Infinity;
             isLiveRef.current = live;
             setIsLive(live);
+            // Notify the room so late-joiners know to start at live edge
+            onIsLiveRef.current?.(live);
           }
           setStatusMsg(null); setError(null);
           setSubtitleTracks(hls.subtitleTracks.map((tk, i) => ({ id: i, name: tk.name || tk.lang || `Track ${i + 1}`, lang: tk.lang })));
