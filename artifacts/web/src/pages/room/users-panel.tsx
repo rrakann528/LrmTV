@@ -36,7 +36,7 @@ interface UsersPanelProps {
   requestSync: () => void;
   currentRoomName?: string;
   renameRoom?: (name: string) => void;
-  onUserClick?: (username: string) => void;
+  onUserClick?: (username: string, userId?: number) => void;
   deleteRoom?: () => void;
 }
 
@@ -376,7 +376,7 @@ export default function UsersPanel({
                     <button
                       className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white shadow relative shrink-0"
                       style={{ backgroundColor: generateColorFromString(user.username) }}
-                      onClick={() => !isYou && onUserClick?.(user.username)}
+                      onClick={() => !isYou && onUserClick?.(user.username, user.userId)}
                     >
                       {user.username.substring(0, 2).toUpperCase()}
                       <div className="absolute bottom-0 end-0 w-3 h-3 bg-green-500 border-2 border-[#1a1a1a] rounded-full" />
@@ -385,7 +385,7 @@ export default function UsersPanel({
                     {/* Name — also opens profile */}
                     <button
                       className="flex flex-col min-w-0 text-start"
-                      onClick={() => !isYou && onUserClick?.(user.username)}
+                      onClick={() => !isYou && onUserClick?.(user.username, user.userId)}
                       disabled={isYou}
                     >
                       <span className="text-sm font-medium text-white flex items-center gap-1.5 truncate">
@@ -464,7 +464,7 @@ export default function UsersPanel({
                 {/* View Profile */}
                 <button
                   className="flex items-center gap-3 px-4 py-3.5 rounded-xl hover:bg-white/8 transition text-white w-full text-start"
-                  onClick={() => { onUserClick?.(adminSheetUser.username); setAdminSheetUser(null); }}
+                  onClick={() => { onUserClick?.(adminSheetUser.username, adminSheetUser.userId); setAdminSheetUser(null); }}
                 >
                   <UserCircle className="w-5 h-5 text-white/60 shrink-0" />
                   <span className="text-sm">{(lang === 'ar') ? 'عرض الملف الشخصي' : 'View Profile'}</span>

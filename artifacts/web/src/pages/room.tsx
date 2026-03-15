@@ -66,7 +66,7 @@ export default function RoomPage() {
   } = useSocket(slug);
 
   const [activeTab, setActiveTab] = useState<'chat' | 'playlist' | 'users' | 'friends'>('chat');
-  const [roomProfileUsername, setRoomProfileUsername] = useState<string | null>(null);
+  const [roomProfile, setRoomProfile] = useState<{ username: string; userId?: number } | null>(null);
   const { user: authUser } = useAuth();
   const [micOn, setMicOn]       = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
@@ -557,7 +557,7 @@ export default function RoomPage() {
                   requestSync={requestSync}
                   currentRoomName={roomName || room.name}
                   renameRoom={renameRoom}
-                  onUserClick={setRoomProfileUsername}
+                  onUserClick={(username, userId) => setRoomProfile({ username, userId })}
                   deleteRoom={isAdmin ? handleDeleteRoom : undefined}
                 />
               )}
@@ -590,10 +590,11 @@ export default function RoomPage() {
 
       {/* User Profile Sheet (from room) */}
       <AnimatePresence>
-        {roomProfileUsername && (
+        {roomProfile && (
           <UserProfileSheet
-            username={roomProfileUsername}
-            onClose={() => setRoomProfileUsername(null)}
+            userId={roomProfile.userId}
+            username={roomProfile.username}
+            onClose={() => setRoomProfile(null)}
           />
         )}
       </AnimatePresence>
