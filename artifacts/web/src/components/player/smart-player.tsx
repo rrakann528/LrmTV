@@ -34,6 +34,7 @@ export interface SmartPlayerHandle {
   seekTo: (time: number, type?: string) => void;
   play: () => void;
   pause: () => void;
+  getVideoElement: () => HTMLVideoElement | null;
 }
 
 export interface ChatMessage {
@@ -223,6 +224,7 @@ export const SmartPlayer = forwardRef<SmartPlayerHandle, SmartPlayerProps>(
       },
       play: () => { if (isHls) hlsPlayerRef.current?.play(); },
       pause: () => { if (isHls) hlsPlayerRef.current?.pause(); },
+      getVideoElement: () => isHls ? (hlsPlayerRef.current?.getVideoElement() ?? null) : null,
     }));
 
     const handleError = useCallback((err: unknown) => {

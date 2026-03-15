@@ -100,6 +100,7 @@ export interface HlsPlayerHandle {
   seekTo: (time: number) => void;
   play: () => void;
   pause: () => void;
+  getVideoElement: () => HTMLVideoElement | null;
 }
 
 export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
@@ -213,6 +214,7 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
       seekTo: (time: number) => { if (videoRef.current) videoRef.current.currentTime = time; },
       play: () => { videoRef.current?.play().catch(() => {}); },
       pause: () => { videoRef.current?.pause(); },
+      getVideoElement: () => videoRef.current,
     }));
 
     // ── Universal player — detect stream type then route to best engine ────────
