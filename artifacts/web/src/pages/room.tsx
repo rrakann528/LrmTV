@@ -609,29 +609,32 @@ export default function RoomPage() {
       </AnimatePresence>
 
       {/* ── Room Settings Sheet ──────────────────────────────────────── */}
-      <AnimatePresence>
-        {showRoomSettings && isAdmin && (
-          <RoomSettingsSheet
-            isAdmin={isAdmin}
-            allowGuestControl={allowGuestControl}
-            allowGuestEntry={allowGuestEntry}
-            isPrivate={isPrivate}
-            chatDisabled={chatDisabled}
-            micDisabled={micDisabled}
-            cameraDisabled={cameraDisabled}
-            toggleAllowGuests={toggleAllowGuests}
-            toggleGuestEntry={toggleGuestEntry}
-            togglePrivacy={togglePrivacy}
-            toggleChat={toggleChat}
-            toggleMic={toggleMic}
-            toggleCamera={toggleCamera}
-            currentRoomName={roomName || room.name}
-            renameRoom={renameRoom}
-            deleteRoom={isAdmin ? handleDeleteRoom : undefined}
-            onClose={() => setShowRoomSettings(false)}
-          />
-        )}
-      </AnimatePresence>
+      {createPortal(
+        <AnimatePresence>
+          {showRoomSettings && isAdmin && (
+            <RoomSettingsSheet
+              isAdmin={isAdmin}
+              allowGuestControl={allowGuestControl}
+              allowGuestEntry={allowGuestEntry}
+              isPrivate={isPrivate}
+              chatDisabled={chatDisabled}
+              micDisabled={micDisabled}
+              cameraDisabled={cameraDisabled}
+              toggleAllowGuests={toggleAllowGuests}
+              toggleGuestEntry={toggleGuestEntry}
+              togglePrivacy={togglePrivacy}
+              toggleChat={toggleChat}
+              toggleMic={toggleMic}
+              toggleCamera={toggleCamera}
+              currentRoomName={roomName || room.name}
+              renameRoom={renameRoom}
+              deleteRoom={isAdmin ? handleDeleteRoom : undefined}
+              onClose={() => setShowRoomSettings(false)}
+            />
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
       {/* ── Media Confirmation Dialog ────────────────────────────────── */}
       {mediaConfirm && createPortal(
