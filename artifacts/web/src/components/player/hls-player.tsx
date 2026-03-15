@@ -277,6 +277,7 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
         destroyAll();
         setStatusMsg('native');
         video.removeAttribute('crossorigin');
+        video.setAttribute('referrerpolicy', 'no-referrer');
         const targetSrc = nativeSrc ?? src;
         video.src = targetSrc;
         const onMeta = () => { if (!cancelled) { setIsLive(!isFinite(video.duration) || video.duration === Infinity); setStatusMsg(null); setError(null); } };
@@ -439,6 +440,7 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
           // Full reset: remove crossorigin, clear src, then reload — critical on iOS Safari
           // after HLS.js was previously attached to the same video element
           video.removeAttribute('crossorigin');
+          video.setAttribute('referrerpolicy', 'no-referrer'); // Don't leak app domain as Referer to CDN
           video.removeAttribute('src');
           video.load();
           video.src = src;
@@ -667,6 +669,7 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
           ref={videoRef}
           style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
           playsInline
+          referrerPolicy="no-referrer"
           onPlay={() => { setAutoplayBlocked(false); setError(null); onPlay?.(); }}
           onPause={onPause}
           onSeeked={() => { if (videoRef.current) onSeek?.(videoRef.current.currentTime); }}
