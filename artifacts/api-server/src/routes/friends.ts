@@ -161,6 +161,7 @@ router.get("/friends", requireAuth, async (req: AuthRequest, res): Promise<void>
   ]);
 
   const rows = [...asSender, ...asReceiver];
+  console.log(`[friends] uid=${uid} asSender=${asSender.length} asReceiver=${asReceiver.length} total=${rows.length}`);
 
   // Get muted friends for this user
   const muted = await db
