@@ -12,7 +12,7 @@ console.log(`[env] DATABASE_URL set: ${!!process.env.DATABASE_URL}`);
 console.log(`[env] JWT_SECRET set: ${!!process.env.JWT_SECRET}`);
 console.log(`[env] NODE_ENV: ${process.env.NODE_ENV || 'not set'}`);
 if (!process.env.JWT_SECRET) {
-  console.error('[env] ⚠️  JWT_SECRET is NOT set — all authentication will FAIL! Set this in Railway Variables.');
+  console.warn('[env] ⚠️  JWT_SECRET not set — using fallback secret. Set JWT_SECRET in Railway Variables for production security.');
 }
 
 const httpServer = createServer(app);
