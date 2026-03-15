@@ -359,6 +359,59 @@ router.patch("/friends/:id", requireAuth, async (req: AuthRequest, res): Promise
 
   if (action === "accepted") {
     await db.update(friendshipsTable).set({ status: "accepted" }).where(eq(friendshipsTable.id, id));
+
+    // ── Notify the requester ─────────────────────────────────────────────────
+    try {
+      const [accepter] = await db
+        .select({ username: usersTable.username, displayName: usersTable.displayName })
+        .from(usersTable).where(eq(usersTable.id, uid)).limit(1);
+
+      const accepterName = accepter?.displayName || accepter?.username || "مستخدم";
+
+      // Real-time socket (if app is open)
+      const io = getIO();
+      if (io) {
+        io.to(`user:${row.requesterId}`).emit("friend-accepted", {
+          byId: uid,
+          byName: accepterName,
+        });
+      }
+
+      // Push notification (if app is closed / backgrounded)
+      const subs = await db
+        .select()
+        .from(pushSubscriptionsTable)
+        .where(eq(pushSubscriptionsTable.userId, row.requesterId));
+
+      if (subs.length > 0) {
+        const payload = JSON.stringify({
+          title: "تم قبول طلب الصداقة! 🎉",
+          body: `${accepterName} قبل طلب صداقتك`,
+          icon: "/icon-192.svg",
+          url: "/home",
+          tag: `friend-accepted-${uid}`,
+        });
+
+        await Promise.allSettled(
+          subs.map(async sub => {
+            try {
+              await webpush.sendNotification(
+                { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+                payload,
+              );
+              console.log(`[FriendAccept Push] Sent to userId=${sub.userId}`);
+            } catch (err: any) {
+              console.error(`[FriendAccept Push] Failed userId=${sub.userId} status=${err?.statusCode}`);
+              if (err?.statusCode === 410 || err?.statusCode === 404) {
+                await db.delete(pushSubscriptionsTable).where(eq(pushSubscriptionsTable.id, sub.id));
+              }
+            }
+          })
+        );
+      }
+    } catch (e) {
+      console.error("[FriendAccept notify] error:", e);
+    }
   } else {
     await db.delete(friendshipsTable).where(eq(friendshipsTable.id, id));
   }

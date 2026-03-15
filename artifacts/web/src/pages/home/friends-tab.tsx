@@ -69,6 +69,7 @@ export function FriendsTab() {
   const [dmFriend, setDmFriend] = useState<FriendUser | null>(null);
   const [menuFriend, setMenuFriend] = useState<FriendUser | null>(null);
   const [profileUserId, setProfileUserId] = useState<number | null>(null);
+  const [acceptedToast, setAcceptedToast] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
   const { data: friends = [], isLoading } = useQuery<FriendUser[]>({
@@ -121,6 +122,12 @@ export function FriendsTab() {
       qc.invalidateQueries({ queryKey: ['friends'] });
       qc.invalidateQueries({ queryKey: ['friends-badge'] });
     });
+    socket.on('friend-accepted', (data: { byId: number; byName: string }) => {
+      qc.invalidateQueries({ queryKey: ['friends'] });
+      qc.invalidateQueries({ queryKey: ['friends-badge'] });
+      setAcceptedToast(data.byName);
+      setTimeout(() => setAcceptedToast(null), 4000);
+    });
     socket.on('dm:receive', () => {
       if (!dmFriend) {
         qc.invalidateQueries({ queryKey: ['friends-conversations'] });
@@ -169,6 +176,30 @@ export function FriendsTab() {
 
   return (
     <div className="flex flex-col h-full relative">
+      {/* Friend-accepted in-app toast */}
+      <AnimatePresence>
+        {acceptedToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 400 }}
+            className="absolute top-3 inset-x-4 z-50 flex items-center gap-3 bg-green-500/20 border border-green-500/30 backdrop-blur-sm rounded-2xl px-4 py-3 shadow-lg"
+          >
+            <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center shrink-0">
+              <Check className="w-4 h-4 text-green-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-green-400">تم قبول طلب الصداقة! 🎉</p>
+              <p className="text-xs text-green-300/70 truncate">{acceptedToast} قبل طلب صداقتك</p>
+            </div>
+            <button onClick={() => setAcceptedToast(null)} className="shrink-0 text-green-400/60 hover:text-green-400">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Sub tabs */}
       <div className="flex gap-1 mx-4 mt-4 mb-3 bg-muted/50 rounded-2xl p-1">
         {([
