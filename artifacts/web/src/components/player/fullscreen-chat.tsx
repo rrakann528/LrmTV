@@ -61,7 +61,7 @@ export default function FullscreenChat({
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: 60 }}
           transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-          className="absolute inset-y-0 end-0 z-30 flex flex-col w-72 bg-black/90 backdrop-blur-xl border-s border-white/10 shadow-2xl"
+          className="absolute inset-y-0 right-0 z-30 flex flex-col w-72 bg-black/90 backdrop-blur-xl border-l border-white/10 shadow-2xl"
           dir={isRtl ? 'rtl' : 'ltr'}
           onClick={e => e.stopPropagation()}
         >
@@ -147,7 +147,7 @@ export default function FullscreenChat({
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 8 }}
-                  className="absolute bottom-full end-0 mb-1 z-50"
+                  className="absolute bottom-full right-0 mb-1 z-50"
                 >
                   <EmojiPicker
                     theme={Theme.DARK}
