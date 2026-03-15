@@ -103,19 +103,26 @@ CREATE TABLE IF NOT EXISTS direct_messages (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE TABLE IF NOT EXISTS dm_read_receipts (
-  id SERIAL PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  other_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  friend_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   last_read_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (user_id, other_user_id)
+  PRIMARY KEY (user_id, friend_id)
 );
 CREATE TABLE IF NOT EXISTS muted_friends (
-  id SERIAL PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  muted_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (user_id, muted_user_id)
+  friend_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  PRIMARY KEY (user_id, friend_id)
 );
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='dm_read_receipts' AND column_name='other_user_id') THEN
+    ALTER TABLE dm_read_receipts RENAME COLUMN other_user_id TO friend_id;
+  END IF;
+END $$;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='muted_friends' AND column_name='muted_user_id') THEN
+    ALTER TABLE muted_friends RENAME COLUMN muted_user_id TO friend_id;
+  END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS idx_friendships_addressee ON friendships(addressee_id);
 CREATE INDEX IF NOT EXISTS idx_chat_messages_room ON chat_messages(room_id);
 CREATE INDEX IF NOT EXISTS idx_playlist_items_room ON playlist_items(room_id);
