@@ -398,72 +398,66 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
         return hls;
       };
 
-      // ── S-HLS chain: Direct → Manifest-proxy (CF) → Full-proxy (CF) → Native ─
+      // ── S-HLS chain: Direct → Native → CF-Manifest → CF-Full ────────────────
+      // Order rationale:
+      //   S1 HLS.js direct  — fastest, best quality switching
+      //   S2 native <video>  — no CORS restriction, works for IP-locked streams on any Safari
+      //   S3 CF manifest     — manifest via CF (CORS headers added), segments direct
+      //   S4 CF full proxy   — everything via CF (for fully CORS-blocked, non-IP-locked streams)
       const loadViaHls = () => {
         if (cancelled) return;
 
-        // S4 — native <video> fallback (no crossorigin, bypasses CORS + works for IP-locked streams)
-        const s4_native = () => {
+        // S4 — full proxy via CF Worker (all segments through CF)
+        const s4_cfFullProxy = () => {
+          if (cancelled) return;
+          const cfUrl = buildCfUrl(src);
+          if (!cfUrl) { setError('ip-locked'); setStatusMsg(null); return; }
+          setStatusMsg('hls-proxy');
+          const hls = makeHls(() => { setError('ip-locked'); setStatusMsg(null); });
+          hlsRef.current = hls;
+          hls.loadSource(cfUrl);
+          hls.attachMedia(video);
+        };
+
+        // S3 — manifest-only proxy via CF (adds CORS headers, segments still direct)
+        const s3_cfManifestProxy = () => {
+          if (cancelled) return;
+          const cfUrl = buildCfUrl(src, 'manifest');
+          if (!cfUrl) { s4_cfFullProxy(); return; }
+          setStatusMsg('hls-manifest');
+          const hls = makeHls(() => s4_cfFullProxy());
+          hlsRef.current = hls;
+          hls.loadSource(cfUrl);
+          hls.attachMedia(video);
+        };
+
+        // S2 — native <video> (no CORS, no crossorigin — bypasses CORS & works for IP-locked streams on Safari)
+        const s2_native = () => {
           if (cancelled) return;
           destroyAll();
           setStatusMsg('native');
           video.removeAttribute('crossorigin');
           video.src = src;
-          const onMeta = () => { if (!cancelled) { setIsLive(!isFinite(video.duration) || video.duration === Infinity); onDurationChange(); setStatusMsg(null); setError(null); startStallWatchdog(); } };
-          const onErr  = () => { if (!cancelled) { setError('ip-locked'); setStatusMsg(null); } };
+          const onMeta = () => {
+            if (!cancelled) { setIsLive(!isFinite(video.duration) || video.duration === Infinity); onDurationChange(); setStatusMsg(null); setError(null); startStallWatchdog(); }
+          };
+          const onErr = () => {
+            if (!cancelled) s3_cfManifestProxy();
+          };
           video.addEventListener('loadedmetadata', onMeta, { once: true });
           video.addEventListener('error',          onErr,  { once: true });
         };
 
-        // S3 — full proxy via CF Worker (all segments through CF)
-        const s3_cfFullProxy = () => {
-          if (cancelled) return;
-          const cfUrl = buildCfUrl(src);
-          if (!cfUrl) { s4_native(); return; }
-          setStatusMsg('hls-proxy');
-          const hls = makeHls(() => s4_native());
-          hlsRef.current = hls;
-          hls.loadSource(cfUrl);
-          hls.attachMedia(video);
-        };
-
-        // S2 — manifest-only proxy via CF (cheap: only manifest through CF, segments direct)
-        const s2_cfManifestProxy = () => {
-          if (cancelled) return;
-          const cfUrl = buildCfUrl(src, 'manifest');
-          if (!cfUrl) { requireProxy(s3_cfFullProxy); return; }
-          setStatusMsg('hls-manifest');
-          const hls = makeHls(() => s3_cfFullProxy());
-          hlsRef.current = hls;
-          hls.loadSource(cfUrl);
-          hls.attachMedia(video);
-        };
-
-        // S1 — direct (no proxy, fastest)
+        // S1 — HLS.js direct (best features: adaptive bitrate, quality switching)
         setStatusMsg('hls-direct');
         if (Hls.isSupported()) {
-          const hls = makeHls(() => s2_cfManifestProxy());
+          const hls = makeHls(() => s2_native());
           hlsRef.current = hls;
           hls.loadSource(src);
           hls.attachMedia(video);
         } else if (video.canPlayType('application/vnd.apple.mpegurl') !== '') {
-          // iOS Safari: native HLS — try direct first, then CF proxy
-          const tryNativeHls = (hlsSrc: string, isCfRetry = false) => {
-            if (cancelled) return;
-            destroyAll();
-            video.removeAttribute('crossorigin');
-            video.src = hlsSrc;
-            video.addEventListener('loadedmetadata', () => { if (!cancelled) { onDurationChange(); setIsLive(!isFinite(video.duration) || video.duration === Infinity); setStatusMsg(null); setError(null); startStallWatchdog(); } }, { once: true });
-            video.addEventListener('error', () => {
-              if (cancelled) return;
-              if (!isCfRetry) {
-                const cfUrl = buildCfUrl(src);
-                if (cfUrl) { tryNativeHls(cfUrl, true); return; }
-              }
-              setError('ip-locked'); setStatusMsg(null);
-            }, { once: true });
-          };
-          tryNativeHls(src);
+          // iOS/macOS Safari: native HLS is the primary engine
+          s2_native();
         } else {
           setStatusMsg(null); setError('unsupported');
         }
