@@ -267,8 +267,12 @@ router.get("/friends/conversations", requireAuth, async (req: AuthRequest, res):
 
 // ── Send friend request (+ push notification) ─────────────────────────────────
 router.post("/friends/request", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+  console.log("[friend-request] body:", JSON.stringify(req.body), "uid:", req.userId);
   const parsed = z.object({ addresseeId: z.number() }).safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: "بيانات غير صحيحة" }); return; }
+  if (!parsed.success) {
+    console.error("[friend-request] zod fail:", parsed.error.errors);
+    res.status(400).json({ error: "بيانات غير صحيحة" }); return;
+  }
   const { addresseeId } = parsed.data;
   const uid = req.userId!;
 
@@ -289,6 +293,8 @@ router.post("/friends/request", requireAuth, async (req: AuthRequest, res): Prom
     .insert(friendshipsTable)
     .values({ requesterId: uid, addresseeId, status: "pending" })
     .returning();
+
+  console.log("[friend-request] created row:", row?.id, "from", uid, "to", addresseeId);
 
   // ── Notify the addressee ─────────────────────────────────────────────────────
   try {

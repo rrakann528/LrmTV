@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Search, UserPlus, MessageCircle, Check, X, Clock, Bell, Users, Send, MoreVertical, UserMinus, BellOff, Bell as BellOn } from 'lucide-react';
+import { Search, UserPlus, MessageCircle, Check, X, Clock, Bell, Users, Send, MoreVertical, UserMinus, BellOff, Bell as BellOn, AlertCircle } from 'lucide-react';
 import { Avatar } from '@/components/avatar';
 import { useAuth, apiFetch } from '@/hooks/use-auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -73,6 +73,8 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
   const [dmFriend, setDmFriend] = useState<FriendUser | null>(null);
   const [menuFriend, setMenuFriend] = useState<FriendUser | null>(null);
   const [profileUserId, setProfileUserId] = useState<number | null>(null);
+  const [sentIds, setSentIds] = useState<Set<number>>(new Set());
+  const [requestError, setRequestError] = useState<string | null>(null);
 
   const { data: friends = [], isLoading } = useQuery<FriendUser[]>({
     queryKey: ['friends'],
@@ -111,24 +113,36 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
     }
   }, [pendingReceived.length]);
 
+  // Sync sentIds with friends list (pending_sent from server)
+  useEffect(() => {
+    if (friends.length > 0) {
+      setSentIds(prev => {
+        const next = new Set(prev);
+        friends.filter(f => f.status === 'pending_sent' || f.status === 'accepted').forEach(f => next.add(f.id));
+        return next;
+      });
+    }
+  }, [friends]);
 
   const requestMut = useMutation({
-    mutationFn: async ({ addresseeId }: { addresseeId: number; targetUser: FriendUser }) => {
+    mutationFn: async ({ addresseeId }: { addresseeId: number }) => {
       const r = await apiFetch('/friends/request', { method: 'POST', body: JSON.stringify({ addresseeId }) });
-      if (!r.ok && r.status !== 409) throw new Error('request_failed');
+      let body: any = {};
+      try { body = await r.clone().json(); } catch { /* ignore */ }
+      if (!r.ok && r.status !== 409) {
+        console.error('[friend-request] failed', r.status, body);
+        throw new Error(body?.error || `خطأ ${r.status}`);
+      }
       return r;
     },
-    onMutate: async ({ targetUser }) => {
-      await qc.cancelQueries({ queryKey: ['friends'] });
-      const prev = qc.getQueryData<FriendUser[]>(['friends']) ?? [];
-      qc.setQueryData<FriendUser[]>(['friends'], [
-        ...prev,
-        { ...targetUser, status: 'pending_sent' as const },
-      ]);
-      return { prev };
+    onMutate: ({ addresseeId }) => {
+      setSentIds(prev => new Set(prev).add(addresseeId));
+      setRequestError(null);
     },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.prev) qc.setQueryData(['friends'], ctx.prev);
+    onError: (err: Error, { addresseeId }) => {
+      setSentIds(prev => { const s = new Set(prev); s.delete(addresseeId); return s; });
+      setRequestError(err.message || 'فشل إرسال الطلب');
+      setTimeout(() => setRequestError(null), 5000);
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ['friends'] });
@@ -329,6 +343,21 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
         {/* ── Search ───────────────────────────────────────────────── */}
         {subTab === 'search' && (
           <>
+            {/* Error toast for failed friend requests */}
+            <AnimatePresence>
+              {requestError && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  className="flex items-center gap-2 mb-2 bg-destructive/10 border border-destructive/20 rounded-2xl px-4 py-3"
+                >
+                  <AlertCircle className="w-4 h-4 text-destructive shrink-0" />
+                  <p className="text-xs text-destructive font-medium">{requestError}</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {searching && (
               <div className="flex justify-center py-8">
                 <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -348,7 +377,10 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
             {searchResults.map(u => {
               const isSelf          = u.id === user.id;
               const existing        = friends.find(f => f.id === u.id);
-              const status          = existing?.status ?? 'none';
+              const isSent          = sentIds.has(u.id);
+              const isAccepted      = existing?.status === 'accepted';
+              const isPendingReceived = existing?.status === 'pending_received';
+              const status          = isAccepted ? 'accepted' : isPendingReceived ? 'pending_received' : isSent ? 'pending_sent' : 'none';
               const friendshipId    = existing?.friendshipId;
               const name            = u.displayName || u.username;
 
@@ -376,7 +408,7 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
                     <>
                       {status === 'none' && (
                         <button
-                          onClick={() => requestMut.mutate({ addresseeId: u.id, targetUser: u })}
+                          onClick={() => requestMut.mutate({ addresseeId: u.id })}
                           disabled={requestMut.isPending && requestMut.variables?.addresseeId === u.id}
                           className="flex items-center gap-1.5 px-3.5 py-2 bg-primary text-primary-foreground rounded-xl text-xs font-bold active:scale-95 transition-all disabled:opacity-60 shrink-0"
                         >
