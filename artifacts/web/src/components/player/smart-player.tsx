@@ -456,9 +456,8 @@ export const SmartPlayer = forwardRef<SmartPlayerHandle, SmartPlayerProps>(
                 className="bg-gradient-to-t from-black/90 via-black/50 to-transparent pt-16 pb-2 px-3 space-y-1"
                 onClick={(e) => e.stopPropagation()}
               >
-                {/* Progress bar + left controls — wrapped so we can block all events for guests */}
+                {/* Progress bar — blocked for guests */}
                 <div className="relative">
-                  {/* Transparent blocker: sits on top and absorbs ALL clicks/touches when guest */}
                   {!canControl && (
                     <div
                       className="absolute inset-0 z-10 cursor-not-allowed"
@@ -467,33 +466,40 @@ export const SmartPlayer = forwardRef<SmartPlayerHandle, SmartPlayerProps>(
                       onTouchStartCapture={(e) => e.stopPropagation()}
                     />
                   )}
-
-                {/* Progress bar — always left→right regardless of page RTL */}
-                {rpDuration > 0 && (
-                  <div
-                    className={cn('py-2 group', canControl ? 'cursor-pointer' : 'cursor-default')}
-                    onClick={(e) => {
-                      if (!canControl) return;
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      const ratio = Math.max(0, Math.min((e.clientX - rect.left) / rect.width, 1));
-                      directSeek(ratio * rpDuration);
-                    }}
-                  >
-                    <div className="h-1 md:h-1.5 bg-white/20 rounded-full relative">
-                      <div
-                        className={cn('absolute left-0 top-0 h-full rounded-full', canControl ? 'bg-primary' : 'bg-white/40')}
-                        style={{ width: `${rpDuration > 0 ? (rpCurrentTime / rpDuration) * 100 : 0}%` }}
-                      >
-                        {canControl && <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white shadow" />}
+                  {rpDuration > 0 && (
+                    <div
+                      className={cn('py-2 group', canControl ? 'cursor-pointer' : 'cursor-default')}
+                      onClick={(e) => {
+                        if (!canControl) return;
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const ratio = Math.max(0, Math.min((e.clientX - rect.left) / rect.width, 1));
+                        directSeek(ratio * rpDuration);
+                      }}
+                    >
+                      <div className="h-1 md:h-1.5 bg-white/20 rounded-full relative">
+                        <div
+                          className={cn('absolute left-0 top-0 h-full rounded-full', canControl ? 'bg-primary' : 'bg-white/40')}
+                          style={{ width: `${rpDuration > 0 ? (rpCurrentTime / rpDuration) * 100 : 0}%` }}
+                        >
+                          {canControl && <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white shadow" />}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
 
                 {/* Buttons row — dir=ltr forces physical left→right */}
                 <div className="flex items-center justify-between" dir="ltr">
-                  {/* ── LEFT: Back · Play/Pause · Forward · Volume ── */}
-                  <div className="flex items-center">
+                  {/* ── LEFT: lock badge · Back · Play/Pause · Forward · Time — blocked for guests ── */}
+                  <div className="relative flex items-center">
+                    {!canControl && (
+                      <div
+                        className="absolute inset-0 z-10 cursor-not-allowed"
+                        onClickCapture={(e) => e.stopPropagation()}
+                        onPointerDownCapture={(e) => e.stopPropagation()}
+                        onTouchStartCapture={(e) => e.stopPropagation()}
+                      />
+                    )}
                     {!canControl && (
                       <div className="flex items-center gap-1 px-2 py-1 me-1 rounded-full bg-amber-500/20 border border-amber-400/30">
                         <Lock className="w-3 h-3 text-amber-400" />
@@ -502,7 +508,6 @@ export const SmartPlayer = forwardRef<SmartPlayerHandle, SmartPlayerProps>(
                         </span>
                       </div>
                     )}
-                    {/* Skip Back */}
                     <button
                       className={cn('p-2.5 rounded-full transition', canControl ? 'text-white hover:bg-white/10 active:scale-90' : 'text-white/25 cursor-not-allowed')}
                       onClick={() => directSeek(Math.max(0, rpCurrentTime - 10))}
@@ -510,7 +515,6 @@ export const SmartPlayer = forwardRef<SmartPlayerHandle, SmartPlayerProps>(
                     >
                       <SkipBack className="w-5 h-5" />
                     </button>
-                    {/* Play / Pause */}
                     <button
                       className={cn('p-2.5 rounded-full transition', canControl ? 'text-white hover:bg-white/10 active:scale-90' : 'text-white/25 cursor-not-allowed')}
                       onClick={() => { if (playing) directPause(); else directPlay(); }}
@@ -518,7 +522,6 @@ export const SmartPlayer = forwardRef<SmartPlayerHandle, SmartPlayerProps>(
                     >
                       {playing ? <Pause className="w-5 h-5 fill-white" /> : <Play className="w-5 h-5 fill-white" />}
                     </button>
-                    {/* Skip Forward */}
                     <button
                       className={cn('p-2.5 rounded-full transition', canControl ? 'text-white hover:bg-white/10 active:scale-90' : 'text-white/25 cursor-not-allowed')}
                       onClick={() => directSeek(rpCurrentTime + 10)}
@@ -532,8 +535,8 @@ export const SmartPlayer = forwardRef<SmartPlayerHandle, SmartPlayerProps>(
                       </span>
                     )}
                   </div>
-                  {/* ── RIGHT: Volume · Chat · Fullscreen ── */}
-                  {/* Volume is outside the canControl blocker so ALL users can mute/unmute */}
+
+                  {/* ── RIGHT: Volume · Chat · Fullscreen — always interactive for ALL users ── */}
                   <div className="flex items-center">
                     <button
                       className="p-2.5 text-white hover:bg-white/10 rounded-full transition"
@@ -571,7 +574,6 @@ export const SmartPlayer = forwardRef<SmartPlayerHandle, SmartPlayerProps>(
                     </button>
                   </div>
                 </div>
-                </div>{/* end relative wrapper */}
               </div>
             </motion.div>
           )}
