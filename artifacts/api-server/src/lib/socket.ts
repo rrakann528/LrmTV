@@ -44,6 +44,8 @@ interface RoomState {
   isLive: boolean;
   /** Current subtitle state broadcast to late joiners */
   subtitle: SubtitleSync | null;
+  /** When false, unregistered guests (no userId) are blocked from joining */
+  allowGuestEntry: boolean;
   /** Permanent admin — the user who created/first-joined the room. Restored on rejoin. */
   creatorUserId?: number;
   /** Track last pause so we can detect accidental browser-close pauses */
@@ -159,6 +161,7 @@ function createRoomState(slug: string, roomId: number, roomName: string): RoomSt
     cameraDisabled: false,
     isLive: false,
     subtitle: null,
+    allowGuestEntry: true,
   };
   rooms.set(slug, state);
   return state;
@@ -231,6 +234,12 @@ export function initSocketServer(httpServer: HttpServer): Server {
       // Cancel pending auto-delete if someone is joining an empty room
       cancelRoomDeletion(roomState);
 
+      // Block unregistered guests if the room has guest entry disabled
+      if (!userId && !roomState.allowGuestEntry) {
+        socket.emit("guests-not-allowed");
+        return;
+      }
+
       // A user is the admin if they are the stored creator, OR if the room has no creator yet
       const isCreator = userId != null && userId === roomState.creatorUserId;
       const isFirstJoiner = roomState.users.size === 0 && !roomState.creatorUserId;
@@ -273,6 +282,7 @@ export function initSocketServer(httpServer: HttpServer): Server {
         currentTime: computedTime(roomState),
         isLocked: roomState.isLocked,
         allowGuestControl: roomState.allowGuestControl,
+        allowGuestEntry: roomState.allowGuestEntry,
         background: roomState.background,
         roomName: roomState.roomName,
         users: Array.from(roomState.users.values()),
@@ -370,6 +380,8 @@ export function initSocketServer(httpServer: HttpServer): Server {
       if (!user) return;
 
       if (roomState.chatDisabled && !user.isAdmin) return;
+      // Guests (no userId) cannot send chat messages
+      if (!user.userId) return;
 
       const msg = {
         username: user.username,
@@ -453,6 +465,26 @@ export function initSocketServer(httpServer: HttpServer): Server {
       const [saved] = await db.insert(chatMessagesTable).values(sysMsg).returning();
       io.to(currentRoomSlug).emit("chat-message", { id: saved.id, ...sysMsg, createdAt: saved.createdAt });
       io.to(currentRoomSlug).emit("allow-guests-changed", { allowGuestControl: roomState.allowGuestControl });
+    });
+
+    // ── Toggle guest entry ────────────────────────────────────────────────────
+    socket.on("toggle-guest-entry", async () => {
+      if (!currentRoomSlug) return;
+      const roomState = getRoomState(currentRoomSlug);
+      if (!roomState) return;
+
+      const user = roomState.users.get(socket.id);
+      if (!user?.isAdmin) return;
+
+      roomState.allowGuestEntry = !roomState.allowGuestEntry;
+
+      const msg = roomState.allowGuestEntry
+        ? "Guests can now join / يمكن للزوار الدخول الآن"
+        : "Guests are now blocked / الزوار ممنوعون من الدخول";
+      const sysMsg = { username: "system", content: msg, type: "system" as const, roomId: roomState.roomId };
+      const [saved] = await db.insert(chatMessagesTable).values(sysMsg).returning();
+      io.to(currentRoomSlug).emit("chat-message", { id: saved.id, ...sysMsg, createdAt: saved.createdAt });
+      io.to(currentRoomSlug).emit("guest-entry-changed", { allowGuestEntry: roomState.allowGuestEntry });
     });
 
     // ── Grant DJ ─────────────────────────────────────────────────────────────

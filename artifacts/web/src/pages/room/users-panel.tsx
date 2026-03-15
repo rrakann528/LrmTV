@@ -5,7 +5,7 @@ import {
   Users, Lock, Unlock, RefreshCw, ChevronLeft, Pencil, Check,
   MoreHorizontal, UserCircle, ShieldCheck, LogOut, X,
   Globe, EyeOff, MessageSquareOff, MessageSquare, Mic, MicOff, Video, VideoOff,
-  Trash2, AlertTriangle,
+  Trash2, AlertTriangle, UserX, UserCheck,
 } from 'lucide-react';
 import { RoomUser } from '@/hooks/use-socket';
 import { generateColorFromString, cn } from '@/lib/utils';
@@ -18,12 +18,14 @@ interface UsersPanelProps {
   isAdmin: boolean;
   isLocked: boolean;
   allowGuestControl: boolean;
+  allowGuestEntry: boolean;
   isPrivate: boolean;
   chatDisabled: boolean;
   micDisabled: boolean;
   cameraDisabled: boolean;
   toggleLock: () => void;
   toggleAllowGuests: () => void;
+  toggleGuestEntry: () => void;
   togglePrivacy: () => void;
   toggleChat: () => void;
   toggleMic: () => void;
@@ -39,9 +41,9 @@ interface UsersPanelProps {
 }
 
 export default function UsersPanel({
-  users, you, isAdmin, isLocked, allowGuestControl,
+  users, you, isAdmin, isLocked, allowGuestControl, allowGuestEntry,
   isPrivate, chatDisabled, micDisabled, cameraDisabled,
-  toggleLock, toggleAllowGuests, togglePrivacy, toggleChat, toggleMic, toggleCamera,
+  toggleLock, toggleAllowGuests, toggleGuestEntry, togglePrivacy, toggleChat, toggleMic, toggleCamera,
   toggleDJ, kickUser, transferAdmin,
   requestSync, currentRoomName = '', renameRoom, onUserClick,
   deleteRoom,
@@ -175,6 +177,26 @@ export default function UsersPanel({
                 </div>
               </div>
               <Switch checked={allowGuestControl} onCheckedChange={toggleAllowGuests} />
+            </div>
+
+            {/* Allow guest entry */}
+            <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                {allowGuestEntry
+                  ? <UserCheck className="w-5 h-5 text-green-400 mt-0.5 shrink-0" />
+                  : <UserX className="w-5 h-5 text-red-400 mt-0.5 shrink-0" />}
+                <div>
+                  <p className="text-sm font-medium text-white">
+                    {(lang === 'ar') ? 'دخول الزوار' : 'Guest Entry'}
+                  </p>
+                  <p className="text-xs text-white/50 mt-0.5 leading-relaxed">
+                    {allowGuestEntry
+                      ? ((lang === 'ar') ? 'يمكن للزوار (غير المسجّلين) الدخول' : 'Unregistered guests can join')
+                      : ((lang === 'ar') ? 'الغرفة للمسجّلين فقط' : 'Registered users only')}
+                  </p>
+                </div>
+              </div>
+              <Switch checked={allowGuestEntry} onCheckedChange={toggleGuestEntry} />
             </div>
 
             {/* Privacy / Chat / Mic / Camera */}

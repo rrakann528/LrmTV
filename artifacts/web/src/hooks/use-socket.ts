@@ -44,6 +44,7 @@ export function useSocket(slug: string | null) {
   const [syncState, setSyncState] = useState<SyncState>({ playing: false, time: 0, updatedAt: Date.now(), url: null, source: 'initial', isLive: false });
   const [isLocked, setIsLocked] = useState(false);
   const [allowGuestControl, setAllowGuestControl] = useState(false);
+  const [allowGuestEntry, setAllowGuestEntry] = useState(true);
   const [background, setBackground] = useState<string>('default');
   const [chatMessages, setChatMessages] = useState<ChatMessageData[]>([]);
   const [roomName, setRoomName] = useState<string>('');
@@ -118,6 +119,7 @@ export function useSocket(slug: string | null) {
       });
       setIsLocked(state.isLocked || false);
       setAllowGuestControl(state.allowGuestControl || false);
+      if ((state as any).allowGuestEntry !== undefined) setAllowGuestEntry((state as any).allowGuestEntry);
       setBackground(state.background || 'default');
       if (state.roomName) setRoomName(state.roomName);
       if (state.isPrivate !== undefined) setIsPrivate(state.isPrivate);
@@ -224,6 +226,15 @@ export function useSocket(slug: string | null) {
     socket.on('allow-guests-changed', (data: { allowGuestControl: boolean }) => {
       setAllowGuestControl(data.allowGuestControl);
       setIsLocked(!data.allowGuestControl);
+    });
+
+    socket.on('guest-entry-changed', (data: { allowGuestEntry: boolean }) => {
+      setAllowGuestEntry(data.allowGuestEntry);
+    });
+
+    socket.on('guests-not-allowed', () => {
+      socket.disconnect();
+      window.location.href = '/';
     });
 
     socket.on('background-changed', (data: { background: string }) => {
@@ -354,6 +365,10 @@ export function useSocket(slug: string | null) {
     if (socketRef.current?.connected) socketRef.current.emit('toggle-camera');
   }, []);
 
+  const toggleGuestEntry = useCallback(() => {
+    if (socketRef.current?.connected) socketRef.current.emit('toggle-guest-entry');
+  }, []);
+
   const kickUser = useCallback((targetSocketId: string) => {
     if (socketRef.current?.connected) {
       socketRef.current.emit('kick-user', { targetSocketId });
@@ -392,6 +407,7 @@ export function useSocket(slug: string | null) {
     syncState,
     isLocked,
     allowGuestControl,
+    allowGuestEntry,
     background,
     roomName,
     chatMessages,
@@ -404,6 +420,7 @@ export function useSocket(slug: string | null) {
     emitChatMessage,
     toggleLock,
     toggleAllowGuests,
+    toggleGuestEntry,
     toggleDJ,
     changeBackground,
     renameRoom,

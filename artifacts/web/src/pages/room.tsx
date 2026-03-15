@@ -57,10 +57,10 @@ export default function RoomPage() {
   const { data: room, isLoading: roomLoading } = useGetRoom(slug);
 
   const {
-    socket, users, you, syncState, isLocked, allowGuestControl, background, roomName,
+    socket, users, you, syncState, isLocked, allowGuestControl, allowGuestEntry, background, roomName,
     chatMessages, isPrivate, chatDisabled, micDisabled, cameraDisabled,
     emitSync, emitSeek, emitChatMessage,
-    toggleLock, toggleAllowGuests, toggleDJ, renameRoom, toggleMedia, emitPlaylistUpdate, requestSync,
+    toggleLock, toggleAllowGuests, toggleGuestEntry, toggleDJ, renameRoom, toggleMedia, emitPlaylistUpdate, requestSync,
     kickUser, transferAdmin, togglePrivacy, toggleChat, toggleMic, toggleCamera,
     subtitleSync, emitSubtitleSync, emitStreamType,
   } = useSocket(slug);
@@ -88,6 +88,7 @@ export default function RoomPage() {
 
   const isDJ       = you?.isDJ || you?.isAdmin || false;
   const isAdmin    = you?.isAdmin || false;
+  const isGuest    = !you?.userId;
   const canControl = isDJ || allowGuestControl;
 
   // Tell the server when the DJ hides/closes the PWA so it can swallow
@@ -344,23 +345,23 @@ export default function RoomPage() {
           <div className="flex bg-white/5 rounded-lg border border-white/10 p-0.5">
             <button
               onClick={handleToggleMic}
-              disabled={micDisabled}
-              title={micDisabled ? (lang === 'ar' ? 'المايكروفون معطّل من المضيف' : 'Mic disabled by host') : undefined}
+              disabled={micDisabled || isGuest}
+              title={isGuest ? (lang === 'ar' ? 'سجّل دخولك لاستخدام المايك' : 'Sign in to use mic') : micDisabled ? (lang === 'ar' ? 'المايكروفون معطّل من المضيف' : 'Mic disabled by host') : undefined}
               className={cn('h-8 w-8 flex items-center justify-center rounded-md transition-colors',
-                micDisabled ? 'opacity-40 cursor-not-allowed text-white/40'
+                (micDisabled || isGuest) ? 'opacity-40 cursor-not-allowed text-white/40'
                 : micOn ? 'bg-primary/20 text-primary' : 'text-white/70 hover:text-white hover:bg-white/10')}
             >
-              {micOn && !micDisabled ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4 text-red-400" />}
+              {micOn && !micDisabled && !isGuest ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4 text-red-400" />}
             </button>
             <button
               onClick={handleToggleCamera}
-              disabled={cameraDisabled}
-              title={cameraDisabled ? (lang === 'ar' ? 'الكاميرا معطّلة من المضيف' : 'Camera disabled by host') : undefined}
+              disabled={cameraDisabled || isGuest}
+              title={isGuest ? (lang === 'ar' ? 'سجّل دخولك لاستخدام الكاميرا' : 'Sign in to use camera') : cameraDisabled ? (lang === 'ar' ? 'الكاميرا معطّلة من المضيف' : 'Camera disabled by host') : undefined}
               className={cn('h-8 w-8 flex items-center justify-center rounded-md transition-colors',
-                cameraDisabled ? 'opacity-40 cursor-not-allowed text-white/40'
+                (cameraDisabled || isGuest) ? 'opacity-40 cursor-not-allowed text-white/40'
                 : cameraOn ? 'bg-primary/20 text-primary' : 'text-white/70 hover:text-white hover:bg-white/10')}
             >
-              {cameraOn && !cameraDisabled ? <Video className="w-4 h-4" /> : <VideoOff className="w-4 h-4 text-red-400" />}
+              {cameraOn && !cameraDisabled && !isGuest ? <Video className="w-4 h-4" /> : <VideoOff className="w-4 h-4 text-red-400" />}
             </button>
           </div>
         </div>
@@ -515,6 +516,7 @@ export default function RoomPage() {
                   liveMessages={chatMessages}
                   chatDisabled={chatDisabled}
                   isAdmin={isAdmin}
+                  isGuest={isGuest}
                 />
               )}
               {activeTab === 'playlist' && (
@@ -537,12 +539,14 @@ export default function RoomPage() {
                   isAdmin={isAdmin}
                   isLocked={isLocked}
                   allowGuestControl={allowGuestControl}
+                  allowGuestEntry={allowGuestEntry}
                   isPrivate={isPrivate}
                   chatDisabled={chatDisabled}
                   micDisabled={micDisabled}
                   cameraDisabled={cameraDisabled}
                   toggleLock={toggleLock}
                   toggleAllowGuests={toggleAllowGuests}
+                  toggleGuestEntry={toggleGuestEntry}
                   togglePrivacy={togglePrivacy}
                   toggleChat={toggleChat}
                   toggleMic={toggleMic}

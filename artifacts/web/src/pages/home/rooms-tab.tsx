@@ -300,15 +300,17 @@ export function RoomsTab() {
         )}
       </div>
 
-      {/* FAB */}
-      <motion.button
-        whileTap={{ scale: 0.92 }}
-        onClick={() => setShowCreate(true)}
-        className="fixed left-4 z-30 w-14 h-14 bg-primary rounded-full shadow-xl shadow-primary/40 flex items-center justify-center"
-        style={{ bottom: 'calc(96px + env(safe-area-inset-bottom, 0px))' }}
-      >
-        <Plus className="w-7 h-7 text-primary-foreground" />
-      </motion.button>
+      {/* FAB — only for registered users */}
+      {user && (
+        <motion.button
+          whileTap={{ scale: 0.92 }}
+          onClick={() => setShowCreate(true)}
+          className="fixed left-4 z-30 w-14 h-14 bg-primary rounded-full shadow-xl shadow-primary/40 flex items-center justify-center"
+          style={{ bottom: 'calc(96px + env(safe-area-inset-bottom, 0px))' }}
+        >
+          <Plus className="w-7 h-7 text-primary-foreground" />
+        </motion.button>
+      )}
 
       {/* Create Room Modal */}
       {createPortal(

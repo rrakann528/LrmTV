@@ -28,11 +28,12 @@ interface ChatPanelProps {
   liveMessages: ChatMessage[];
   chatDisabled?: boolean;
   isAdmin?: boolean;
+  isGuest?: boolean;
 }
 
-export default function ChatPanel({ slug, emitChatMessage, username, liveMessages, chatDisabled, isAdmin }: ChatPanelProps) {
+export default function ChatPanel({ slug, emitChatMessage, username, liveMessages, chatDisabled, isAdmin, isGuest }: ChatPanelProps) {
   const { t, lang } = useI18n();
-  const inputBlocked = chatDisabled && !isAdmin;
+  const inputBlocked = (chatDisabled && !isAdmin) || isGuest;
   const { data: history } = useGetRoomMessages(slug);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -165,9 +166,11 @@ export default function ChatPanel({ slug, emitChatMessage, username, liveMessage
             onChange={e => !inputBlocked && setInput(e.target.value)}
             disabled={inputBlocked}
             className="ps-10 rounded-full bg-white/5 border-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
-            placeholder={inputBlocked
-              ? ((lang === 'ar') ? 'الدردشة معطّلة...' : 'Chat is disabled...')
-              : t('typeMessage')}
+            placeholder={isGuest
+              ? ((lang === 'ar') ? 'سجّل دخولك للمشاركة في الدردشة' : 'Sign in to chat')
+              : inputBlocked
+                ? ((lang === 'ar') ? 'الدردشة معطّلة...' : 'Chat is disabled...')
+                : t('typeMessage')}
           />
           
           <Button type="submit" size="icon" disabled={inputBlocked} className="rounded-full shrink-0 disabled:opacity-30 disabled:cursor-not-allowed">
