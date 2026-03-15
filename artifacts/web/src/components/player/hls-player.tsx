@@ -384,6 +384,15 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
             return;
           }
           if (d.type === Hls.ErrorTypes.NETWORK_ERROR && netErrCount < 2) {
+            // CORS / blocked request: response code 0 → fail immediately, don't retry
+            const isCorsBlock = !d.response?.code || d.response.code === 0;
+            if (isCorsBlock) {
+              hls.destroy();
+              if (stallWatchdog) { clearInterval(stallWatchdog); stallWatchdog = null; }
+              setStatusMsg(null);
+              onFatal();
+              return;
+            }
             netErrCount++;
             setTimeout(() => { if (!cancelled) hls.startLoad(); }, 2000);
             return;
