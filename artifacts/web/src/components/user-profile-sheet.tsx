@@ -64,10 +64,26 @@ export function UserProfileSheet({ userId, username, onClose, onChat }: Props) {
 
   const isSelf = me?.id === profile?.id;
 
-  const requestMut  = useMutation({ mutationFn: () => apiFetch('/friends/request', { method: 'POST', body: JSON.stringify({ addresseeId: profile?.id }) }), onSuccess: () => qc.invalidateQueries({ queryKey }) });
-  const respondMut  = useMutation({ mutationFn: (action: 'accepted' | 'rejected') => apiFetch(`/friends/${profile!.friendshipId}`, { method: 'PATCH', body: JSON.stringify({ action }) }), onSuccess: () => { qc.invalidateQueries({ queryKey }); qc.invalidateQueries({ queryKey: ['friends'] }); } });
-  const removeMut   = useMutation({ mutationFn: () => apiFetch(`/friends/${profile!.friendshipId}`, { method: 'DELETE' }), onSuccess: () => { qc.invalidateQueries({ queryKey }); qc.invalidateQueries({ queryKey: ['friends'] }); } });
-  const muteMut     = useMutation({ mutationFn: () => apiFetch(`/friends/${profile?.id}/mute`, { method: profile?.muted ? 'DELETE' : 'POST' }), onSuccess: () => { qc.invalidateQueries({ queryKey }); qc.invalidateQueries({ queryKey: ['friends'] }); } });
+  const requestMut  = useMutation({
+    mutationFn: () => apiFetch('/friends/request', { method: 'POST', body: JSON.stringify({ addresseeId: profile?.id }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey });
+      qc.invalidateQueries({ queryKey: ['friends'] });
+      qc.invalidateQueries({ queryKey: ['friends-badge'] });
+    },
+  });
+  const respondMut  = useMutation({
+    mutationFn: (action: 'accepted' | 'rejected') => apiFetch(`/friends/${profile!.friendshipId}`, { method: 'PATCH', body: JSON.stringify({ action }) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey }); qc.invalidateQueries({ queryKey: ['friends'] }); qc.invalidateQueries({ queryKey: ['friends-badge'] }); },
+  });
+  const removeMut   = useMutation({
+    mutationFn: () => apiFetch(`/friends/${profile!.friendshipId}`, { method: 'DELETE' }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey }); qc.invalidateQueries({ queryKey: ['friends'] }); qc.invalidateQueries({ queryKey: ['friends-badge'] }); },
+  });
+  const muteMut     = useMutation({
+    mutationFn: () => apiFetch(`/friends/${profile?.id}/mute`, { method: profile?.muted ? 'DELETE' : 'POST' }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey }); qc.invalidateQueries({ queryKey: ['friends'] }); },
+  });
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };

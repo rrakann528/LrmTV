@@ -4,11 +4,19 @@ import { useQueryClient } from '@tanstack/react-query';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
+interface DmMsg {
+  id: number;
+  senderId: number;
+  receiverId: number;
+  content: string;
+  createdAt: string;
+}
+
 interface Options {
   userId: number | undefined;
   onFriendRequest?: () => void;
   onFriendAccepted?: (data: { byId: number; byName: string }) => void;
-  onDmReceive?: () => void;
+  onDmReceive?: (msg: DmMsg) => void;
 }
 
 export function useUserSocket({ userId, onFriendRequest, onFriendAccepted, onDmReceive }: Options) {
@@ -40,10 +48,13 @@ export function useUserSocket({ userId, onFriendRequest, onFriendAccepted, onDmR
       onFriendAccepted?.(data);
     });
 
-    socket.on('dm:receive', () => {
+    socket.on('dm:receive', (msg: DmMsg) => {
       qc.invalidateQueries({ queryKey: ['friends-conversations'] });
       qc.invalidateQueries({ queryKey: ['friends-badge'] });
-      onDmReceive?.();
+      // Invalidate the specific DM thread for both participants
+      if (msg?.senderId) qc.invalidateQueries({ queryKey: ['dm', msg.senderId] });
+      if (msg?.receiverId) qc.invalidateQueries({ queryKey: ['dm', msg.receiverId] });
+      onDmReceive?.(msg);
     });
 
     socket.on('room-invite', () => {

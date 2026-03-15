@@ -159,7 +159,19 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
 
   const removeMut = useMutation({
     mutationFn: (friendshipId: number) => apiFetch(`/friends/${friendshipId}`, { method: 'DELETE' }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['friends'] }); setMenuFriend(null); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['friends'] });
+      qc.invalidateQueries({ queryKey: ['friends-badge'] });
+      setMenuFriend(null);
+    },
+  });
+
+  const cancelRequestMut = useMutation({
+    mutationFn: (friendshipId: number) => apiFetch(`/friends/${friendshipId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['friends'] });
+      qc.invalidateQueries({ queryKey: ['friends-badge'] });
+    },
   });
 
   const muteMut = useMutation({
@@ -291,21 +303,27 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
                 <p className="text-xs font-semibold text-muted-foreground py-1">طلبات واردة</p>
                 {pendingReceived.map(f => (
                   <div key={f.id} className="flex items-center gap-3 bg-card border border-border rounded-2xl p-3">
-                    <Avatar name={f.displayName || f.username} color={f.avatarColor} url={f.avatarUrl} size={44} />
-                    <div className="flex-1 min-w-0">
+                    <button onClick={() => setProfileUserId(f.id)} className="flex-shrink-0 active:scale-95 transition-transform">
+                      <Avatar name={f.displayName || f.username} color={f.avatarColor} url={f.avatarUrl} size={44} />
+                    </button>
+                    <button onClick={() => setProfileUserId(f.id)} className="flex-1 min-w-0 text-right active:opacity-70">
                       <p className="font-semibold text-sm text-foreground truncate">{f.displayName || f.username}</p>
                       <p className="text-xs text-muted-foreground">@{f.username}</p>
-                    </div>
-                    <div className="flex gap-1.5">
+                    </button>
+                    <div className="flex gap-1.5 shrink-0">
                       <button
                         onClick={() => f.friendshipId && respondMut.mutate({ id: f.friendshipId, action: 'accepted' })}
-                        className="w-9 h-9 bg-green-500/20 rounded-xl flex items-center justify-center"
+                        disabled={respondMut.isPending}
+                        className="w-9 h-9 bg-green-500/20 rounded-xl flex items-center justify-center active:scale-95 transition-transform"
+                        title="قبول"
                       >
                         <Check className="w-4 h-4 text-green-500" />
                       </button>
                       <button
                         onClick={() => f.friendshipId && respondMut.mutate({ id: f.friendshipId, action: 'rejected' })}
-                        className="w-9 h-9 bg-destructive/10 rounded-xl flex items-center justify-center"
+                        disabled={respondMut.isPending}
+                        className="w-9 h-9 bg-destructive/10 rounded-xl flex items-center justify-center active:scale-95 transition-transform"
+                        title="رفض"
                       >
                         <X className="w-4 h-4 text-destructive" />
                       </button>
@@ -319,12 +337,27 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
                 <p className="text-xs font-semibold text-muted-foreground py-1 mt-2">طلبات مرسلة</p>
                 {pendingSent.map(f => (
                   <div key={f.id} className="flex items-center gap-3 bg-card border border-border rounded-2xl p-3">
-                    <Avatar name={f.displayName || f.username} color={f.avatarColor} url={f.avatarUrl} size={44} />
-                    <div className="flex-1 min-w-0">
+                    <button onClick={() => setProfileUserId(f.id)} className="flex-shrink-0">
+                      <Avatar name={f.displayName || f.username} color={f.avatarColor} url={f.avatarUrl} size={44} />
+                    </button>
+                    <button onClick={() => setProfileUserId(f.id)} className="flex-1 min-w-0 text-right">
                       <p className="font-semibold text-sm text-foreground truncate">{f.displayName || f.username}</p>
                       <p className="text-xs text-muted-foreground">@{f.username}</p>
+                    </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground bg-muted px-2 py-1 rounded-lg">
+                        <Clock className="w-3 h-3" />
+                        انتظار
+                      </span>
+                      <button
+                        onClick={() => f.friendshipId && cancelRequestMut.mutate(f.friendshipId)}
+                        disabled={cancelRequestMut.isPending}
+                        className="w-7 h-7 bg-destructive/10 rounded-lg flex items-center justify-center active:scale-95 transition-transform"
+                        title="إلغاء الطلب"
+                      >
+                        <X className="w-3.5 h-3.5 text-destructive" />
+                      </button>
                     </div>
-                    <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-lg">في الانتظار</span>
                   </div>
                 ))}
               </>
@@ -526,6 +559,17 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
 
               {/* Options */}
               <div className="py-2">
+                {/* View Profile */}
+                <button
+                  onClick={() => { setProfileUserId(menuFriend.id); setMenuFriend(null); }}
+                  className="w-full flex items-center gap-4 px-5 py-4 text-foreground hover:bg-muted/50 transition-colors"
+                >
+                  <Users className="w-5 h-5 text-primary" />
+                  <span className="text-sm font-medium">عرض الملف الشخصي</span>
+                </button>
+
+                <div className="h-px bg-border mx-4" />
+
                 {/* Mute / Unmute */}
                 <button
                   onClick={() => muteMut.mutate({ friendId: menuFriend.id, muted: !!menuFriend.muted })}

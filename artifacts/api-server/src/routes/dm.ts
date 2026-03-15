@@ -106,7 +106,7 @@ router.post("/dm/:friendId", requireAuth, async (req: AuthRequest, res): Promise
       body: preview,
       icon: "/icon-192.svg",
       badge: "/icon-192.svg",
-      url: `/home`,
+      url: `/home?tab=friends`,
       tag: `dm-${uid}`,
     });
 

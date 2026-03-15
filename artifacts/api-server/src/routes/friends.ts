@@ -394,7 +394,7 @@ router.patch("/friends/:id", requireAuth, async (req: AuthRequest, res): Promise
           title: "تم قبول طلب الصداقة! 🎉",
           body: `${accepterName} قبل طلب صداقتك`,
           icon: "/icon-192.svg",
-          url: "/home",
+          url: "/home?tab=friends",
           tag: `friend-accepted-${uid}`,
         });
 
