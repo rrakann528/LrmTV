@@ -32,7 +32,6 @@ interface ChatPanelProps {
 
 export default function ChatPanel({ slug, emitChatMessage, username, liveMessages, chatDisabled, isAdmin }: ChatPanelProps) {
   const { t, lang } = useI18n();
-  const (lang === 'ar') = lang === 'ar';
   const inputBlocked = chatDisabled && !isAdmin;
   const { data: history } = useGetRoomMessages(slug);
   const [messages, setMessages] = useState<ChatMessage[]>([]);

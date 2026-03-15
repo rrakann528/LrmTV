@@ -44,7 +44,6 @@ export default function PlaylistPanel({
   emitSync, emitPlaylistUpdate,
 }: PlaylistPanelProps) {
   const { t, lang } = useI18n();
-  const (lang === 'ar') = lang === 'ar';
   const { data: playlist, isLoading } = useGetRoomPlaylist(slug);
   const deleteMutation = useDeletePlaylistItem();
   const reorderMutation = useReorderPlaylist();

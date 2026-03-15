@@ -1,0 +1,41 @@
+[ 8/10] RUN BASE_PATH=/ pnpm --filter @workspace/web build
+3s
+> @workspace/web@0.0.0 build /app/artifacts/web
+> vite build --config vite.config.ts
+vite v7.3.1 building client environment for production...
+transforming...
+✓ 102 modules transformed.
+✗ Build failed in 1.38s
+error during build:
+[vite:esbuild] Transform failed with 1 error:
+/app/artifacts/web/src/pages/room/chat-panel.tsx:35:8: ERROR: Expected identifier but found "("
+file: /app/artifacts/web/src/pages/room/chat-panel.tsx:35:8
+Expected identifier but found "("
+33 |  export default function ChatPanel({ slug, emitChatMessage, username, liveMessages, chatDisabled, isAdmin }: ChatPanel...
+34 |    const { t, lang } = useI18n();
+35 |    const (lang === 'ar') = lang === 'ar';
+   |          ^
+36 |    const inputBlocked = chatDisabled && !isAdmin;
+37 |    const { data: history } = useGetRoomMessages(slug);
+    at failureErrorWithLog (/app/node_modules/.pnpm/esbuild@0.27.3/node_modules/esbuild/lib/main.js:1467:15)
+    at /app/node_modules/.pnpm/esbuild@0.27.3/node_modules/esbuild/lib/main.js:736:50
+    at responseCallbacks.<computed> (/app/node_modules/.pnpm/esbuild@0.27.3/node_modules/esbuild/lib/main.js:603:9)
+    at handleIncomingPacket (/app/node_modules/.pnpm/esbuild@0.27.3/node_modules/esbuild/lib/main.js:658:12)
+    at Socket.readFromStdout (/app/node_modules/.pnpm/esbuild@0.27.3/node_modules/esbuild/lib/main.js:581:7)
+    at Socket.emit (node:events:524:28)
+    at addChunk (node:internal/streams/readable:561:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+    at Readable.push (node:internal/streams/readable:392:5)
+    at Pipe.onStreamRead (node:internal/stream_base_commons:191:23)
+/app/artifacts/web:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/web@0.0.0 build: `vite build --config vite.config.ts`
+Exit status 1
+Dockerfile:9
+-------------------
+7 |     COPY . .
+8 |     RUN pnpm install --no-frozen-lockfile
+9 | >>> RUN BASE_PATH=/ pnpm --filter @workspace/web build
+10 |     RUN pnpm --filter @workspace/api-server build
+11 |     RUN chmod +x /app/start.sh
+-------------------
+ERROR: failed to build: failed to solve: process "/bin/sh -c BASE_PATH=/ pnpm --filter @workspace/web build" did not complete successfully: exit code: 1
