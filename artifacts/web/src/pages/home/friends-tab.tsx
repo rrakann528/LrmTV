@@ -32,18 +32,21 @@ type SubTab = 'friends' | 'requests' | 'search';
 
 async function fetchFriends(): Promise<FriendUser[]> {
   const r = await apiFetch('/friends');
-  return r.json();
+  const data = await r.json();
+  return Array.isArray(data) ? data : [];
 }
 
 async function fetchConversations(): Promise<Conversation[]> {
   const r = await apiFetch('/friends/conversations');
-  return r.json();
+  const data = await r.json();
+  return Array.isArray(data) ? data : [];
 }
 
 async function searchUsers(q: string): Promise<FriendUser[]> {
   if (!q.trim()) return [];
   const r = await fetch(`${BASE}/api/friends/search?q=${encodeURIComponent(q)}`, { credentials: 'include' });
-  return r.json();
+  const data = await r.json();
+  return Array.isArray(data) ? data : [];
 }
 
 function formatLastTime(iso: string): string {

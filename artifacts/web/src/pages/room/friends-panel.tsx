@@ -54,7 +54,10 @@ export default function FriendsPanel({ userId, roomSlug, roomName }: FriendsPane
 
   const loadFriends = useCallback(async () => {
     const r = await apiFetch('/friends');
-    if (r.ok) setFriends(await r.json());
+    if (r.ok) {
+      const data = await r.json();
+      setFriends(Array.isArray(data) ? data : []);
+    }
   }, []);
 
   useEffect(() => { loadFriends(); }, [loadFriends]);
