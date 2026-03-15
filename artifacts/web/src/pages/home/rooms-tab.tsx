@@ -55,6 +55,14 @@ function useKeyboardOffset() {
   return offset;
 }
 
+// Prefetch the room page chunk so navigation feels instant
+const prefetchedRef: Set<string> = new Set();
+function prefetchRoomChunk() {
+  if (prefetchedRef.has('room')) return;
+  prefetchedRef.add('room');
+  import('@/pages/room').catch(() => {});
+}
+
 export function RoomsTab() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
@@ -252,6 +260,8 @@ export function RoomsTab() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05 }}
               className="flex items-center gap-3 bg-card border border-border rounded-2xl p-4"
+              onMouseEnter={prefetchRoomChunk}
+              onTouchStart={prefetchRoomChunk}
             >
               <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center flex-shrink-0">
                 {room.type === 'private' ? (

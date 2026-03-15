@@ -38,22 +38,42 @@ export default defineConfig(async () => {
     build: {
       outDir: path.resolve(import.meta.dirname, "dist/public"),
       emptyOutDir: true,
+      // Minify with esbuild (default, fastest). Keeps bundles small without needing terser.
+      minify: "esbuild",
+      // Inline assets smaller than 4 KB to save round trips
+      assetsInlineLimit: 4096,
       rollupOptions: {
         output: {
+          // Fine-grained chunk splitting:
+          //   • heavy media/player deps only load when the user enters a room
+          //   • UI / icon deps load once then stay cached across navigation
           manualChunks: (id) => {
-            if (id.includes("node_modules/framer-motion")) return "framer";
+            // Player-specific heavy deps — defer until room page loads
+            if (id.includes("node_modules/hls.js"))         return "chunk-hls";
+            if (id.includes("node_modules/dashjs"))          return "chunk-dash";
+            if (id.includes("node_modules/react-player"))    return "chunk-player";
+            // Animation — only used in a few places
+            if (id.includes("node_modules/framer-motion"))   return "chunk-framer";
+            // Emoji picker — large, rarely used
             if (
               id.includes("node_modules/emoji-picker-react") ||
               id.includes("node_modules/emoji-")
-            )
-              return "emoji";
-            if (id.includes("node_modules/hls.js")) return "hls";
-            if (id.includes("node_modules/socket.io")) return "socket";
-            if (id.includes("node_modules/")) return "vendor";
+            )                                                return "chunk-emoji";
+            // Socket.io client
+            if (id.includes("node_modules/socket.io"))       return "chunk-socket";
+            // Radix UI / shadcn components — shared across all pages
+            if (id.includes("node_modules/@radix-ui"))       return "chunk-radix";
+            // React core
+            if (
+              id.includes("node_modules/react/") ||
+              id.includes("node_modules/react-dom/")
+            )                                                return "chunk-react";
+            // Everything else from node_modules
+            if (id.includes("node_modules/"))                return "chunk-vendor";
           },
         },
       },
-      chunkSizeWarningLimit: 1000,
+      chunkSizeWarningLimit: 1200,
     },
     server: {
       port,

@@ -16,10 +16,22 @@
     <meta name="apple-mobile-web-app-title" content="LrmTV" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.svg" />
 
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Prevents white flash in dark-mode browsers before CSS loads -->
+    <meta name="color-scheme" content="dark" />
+
+    <!--
+      Non-render-blocking font loading:
+      Preconnect early, then load the stylesheet as 'print' (never blocks rendering),
+      switching to 'all' once loaded. Falls back for noscript environments.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'" />
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" /></noscript>
+
+    <!-- Instant dark background — prevents white flash before CSS is parsed -->
+    <style>html,body,#root{background:#0a0a0a;margin:0;padding:0}</style>
 
     <!-- Global error display — shows JS errors on screen instead of black screen -->
     <script>
@@ -39,14 +51,6 @@
       });
     </script>
 
-    <!-- Service worker registration -->
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', function() {
-          navigator.serviceWorker.register('/sw.js');
-        });
-      }
-    </script>
   </head>
   <body>
     <div id="root"></div>

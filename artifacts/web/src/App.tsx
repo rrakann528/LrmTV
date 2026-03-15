@@ -19,9 +19,15 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 30_000,
-      gcTime: 5 * 60_000,
+      gcTime: 10 * 60_000,         // Keep cached data longer (10 min) for offline scenarios
       refetchOnWindowFocus: false,
       retry: 1,
+      // 'offlineFirst' serves cached data immediately when there is no network,
+      // instead of showing an error. Requests are paused and retried when online again.
+      networkMode: 'offlineFirst',
+    },
+    mutations: {
+      networkMode: 'offlineFirst',
     },
   },
 });
