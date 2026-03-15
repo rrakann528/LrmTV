@@ -73,6 +73,7 @@ export default function RoomPage() {
   const [bgImage, setBgImage]   = useState('');
   const [copied, setCopied]     = useState(false);
   const [isSeeking]             = useState(false);
+  const [playerReady, setPlayerReady] = useState(false);
 
   // Confirmation dialog before enabling mic/camera
   const [mediaConfirm, setMediaConfirm] = useState<'mic' | 'camera' | null>(null);
@@ -145,10 +146,15 @@ export default function RoomPage() {
 
   const isRemoteSeekRef = useRef(false);
 
+  // Reset playerReady whenever the video URL changes so the initial-seek gate resets
+  useEffect(() => {
+    setPlayerReady(false);
+  }, [syncState.url]);
+
   // Sync effect — thresholds differ by source to avoid heartbeat-induced stuttering
   // heartbeat: only correct if >5s off (clock drift, tab freeze, etc.)
   // action:    correct if >1.5s off (someone else play/pause/seek)
-  // initial:   always seek on join (player may have just mounted)
+  // initial:   wait until player signals ready (loadedmetadata) to avoid seeking into an unloaded stream
   useEffect(() => {
     if (!playerRef.current || isSeeking) return;
 
@@ -157,7 +163,7 @@ export default function RoomPage() {
 
     const threshold = syncState.source === 'heartbeat' ? 5
                     : syncState.source === 'action'    ? 1.5
-                    : 0; // initial — always seek
+                    : playerReady ? 0 : Infinity; // initial — only seek after player is ready
 
     if (diff > threshold) {
       isRemoteSeekRef.current = true;
@@ -165,7 +171,7 @@ export default function RoomPage() {
       setTimeout(() => { isRemoteSeekRef.current = false; }, 600);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [syncState.time, syncState.playing, syncState.source, isSeeking]);
+  }, [syncState.time, syncState.playing, syncState.source, isSeeking, playerReady]);
 
   const doEnableMic = useCallback(async () => {
     setMicOn(true);
@@ -374,6 +380,7 @@ export default function RoomPage() {
                 controls={canControl}
                 canControl={canControl}
                 initialTime={syncState.time}
+                onReady={() => setPlayerReady(true)}
                 onPlay={handlePlay}
                 onPause={handlePause}
                 onSeek={handleSeek}

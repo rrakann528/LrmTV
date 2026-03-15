@@ -80,9 +80,13 @@ interface HlsPlayerProps {
   src: string;
   playing: boolean;
   canControl?: boolean;
+  /** Position (seconds) to seek to when the player becomes ready (late-join sync) */
+  initialTime?: number;
   onPlay?: () => void;
   onPause?: () => void;
   onSeek?: (time: number) => void;
+  /** Fired once the player has loaded enough to accept seeks — used by room to gate sync */
+  onReady?: () => void;
   containerRef: React.RefObject<HTMLDivElement | null>;
   chatMessages: ChatMessage[];
   username: string;
@@ -109,9 +113,11 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
       src,
       playing,
       canControl = true,
+      initialTime = 0,
       onPlay,
       onPause,
       onSeek,
+      onReady,
       containerRef,
       chatMessages,
       username,
@@ -128,6 +134,14 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
     const dashRef  = useRef<{ destroy: () => void } | null>(null);
     const reconnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const forceProxyFnRef = useRef<(() => void) | null>(null);
+    // Keep latest onReady in a ref so closures inside useEffect always call the current prop
+    const onReadyRef = useRef(onReady);
+    useEffect(() => { onReadyRef.current = onReady; }, [onReady]);
+    // Keep latest initialTime in a ref so signalReady always uses the most up-to-date position
+    const initialTimeRef = useRef(initialTime);
+    useEffect(() => { initialTimeRef.current = initialTime; }, [initialTime]);
+    // Fire onReady only once per src load (reset in the load effect)
+    const readyFiredRef = useRef(false);
     const [statusMsg, setStatusMsg] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [retryKey, setRetryKey] = useState(0);
@@ -230,7 +244,19 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
 
       if (reconnTimerRef.current) { clearTimeout(reconnTimerRef.current); reconnTimerRef.current = null; }
 
+      readyFiredRef.current = false;
       let cancelled = false;
+
+      // Called once the player has loaded enough to seek — seeks to initialTime then fires onReady
+      const signalReady = () => {
+        if (cancelled || readyFiredRef.current) return;
+        readyFiredRef.current = true;
+        const targetTime = initialTimeRef.current;
+        if (targetTime > 2 && video) {
+          video.currentTime = targetTime;
+        }
+        onReadyRef.current?.();
+      };
 
       // ── Destroy all active engines ────────────────────────────────────────
       const destroyAll = () => {
@@ -299,7 +325,7 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
         video.setAttribute('referrerpolicy', 'no-referrer');
         const targetSrc = nativeSrc ?? src;
         video.src = targetSrc;
-        const onMeta = () => { if (!cancelled) { setIsLive(!isFinite(video.duration) || video.duration === Infinity); setStatusMsg(null); setError(null); } };
+        const onMeta = () => { if (!cancelled) { setIsLive(!isFinite(video.duration) || video.duration === Infinity); setStatusMsg(null); setError(null); signalReady(); } };
         const onErr  = () => {
           if (cancelled) return;
           // If direct load failed and we haven't tried CF proxy yet, try through it
@@ -329,7 +355,7 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
           dashRef.current = player as { destroy: () => void };
           player.initialize(video, src, false);
           const Events = (djs.MediaPlayer?.events ?? djs.default?.MediaPlayer?.events ?? {});
-          player.on(Events.STREAM_INITIALIZED ?? 'streamInitialized', () => { if (!cancelled) { setStatusMsg(null); setError(null); onDurationChange(); } });
+          player.on(Events.STREAM_INITIALIZED ?? 'streamInitialized', () => { if (!cancelled) { setStatusMsg(null); setError(null); onDurationChange(); signalReady(); } });
           player.on(Events.ERROR ?? 'error', () => { if (!cancelled) { setError('ip-locked'); setStatusMsg(null); } });
         } catch {
           if (!cancelled) loadViaHls();
@@ -424,6 +450,7 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
           setStatusMsg(null); setError(null);
           setSubtitleTracks(hls.subtitleTracks.map((tk, i) => ({ id: i, name: tk.name || tk.lang || `Track ${i + 1}`, lang: tk.lang })));
           startStallWatchdog();
+          signalReady();
         });
         return hls;
       };
@@ -487,7 +514,7 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
           video.src = src;
           video.load();
           const onMeta = () => {
-            if (!cancelled) { setIsLive(!isFinite(video.duration) || video.duration === Infinity); onDurationChange(); setStatusMsg(null); setError(null); startStallWatchdog(); }
+            if (!cancelled) { setIsLive(!isFinite(video.duration) || video.duration === Infinity); onDurationChange(); setStatusMsg(null); setError(null); startStallWatchdog(); signalReady(); }
           };
           const onErr = () => {
             if (!cancelled) s3_cfManifestProxy();

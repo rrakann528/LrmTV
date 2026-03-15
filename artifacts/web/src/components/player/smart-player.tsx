@@ -56,6 +56,8 @@ interface SmartPlayerProps {
   onPlay?: () => void;
   onPause?: () => void;
   onSeek?: (time: number) => void;
+  /** Fired once the underlying player is loaded enough to accept seeks */
+  onReady?: () => void;
   chatMessages?: ChatMessage[];
   username?: string;
   onSendChatMessage?: (content: string) => void;
@@ -76,6 +78,7 @@ export const SmartPlayer = forwardRef<SmartPlayerHandle, SmartPlayerProps>(
       onPlay,
       onPause,
       onSeek,
+      onReady,
       chatMessages = [],
       username = '',
       onSendChatMessage,
@@ -259,9 +262,11 @@ export const SmartPlayer = forwardRef<SmartPlayerHandle, SmartPlayerProps>(
             src={normalizedUrl}
             playing={playing}
             canControl={canControl}
+            initialTime={initialTime}
             onPlay={onPlay}
             onPause={onPause}
             onSeek={onSeek}
+            onReady={onReady}
             containerRef={containerRef}
             chatMessages={chatMessages}
             username={username}
@@ -334,6 +339,7 @@ export const SmartPlayer = forwardRef<SmartPlayerHandle, SmartPlayerProps>(
           onReady={() => {
             setError(null);
             setReady(true);
+            onReady?.();
 
             // Seek to room's current position so latecomers are in sync
             if (initialTime > 2) {
