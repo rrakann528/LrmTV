@@ -696,14 +696,14 @@ export function initSocketServer(httpServer: HttpServer): Server {
         io.to(currentRoomSlug).emit("users-updated", { users: Array.from(roomState.users.values()) });
       }
 
-      // When the admin/DJ disconnects (app closed, PWA backgrounded, network lost),
+      // When the user who last paused disconnects (app closed, tab closed, network lost),
       // restore play so the room never freezes for remaining viewers.
-      // We restore if the room was paused by THIS socket — regardless of when,
-      // because any pause from a disconnecting admin is effectively accidental.
+      // This covers admins/DJs whose browser auto-pauses on close, AND guests who had
+      // allowGuestControl=true and left mid-session (their auto-pause would otherwise
+      // lock the room because the restore logic would never fire for non-admin users).
       const wasDjBackgrounding =
         roomState.djBackgrounding?.socketId === socket.id;
       if (
-        (user?.isAdmin || user?.isDJ) &&
         roomState.users.size > 0 &&
         !roomState.isPlaying &&
         roomState.currentVideo &&
