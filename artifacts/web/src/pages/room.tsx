@@ -466,14 +466,16 @@ export default function RoomPage() {
           'md:flex-grow-0 md:w-72 lg:w-96 md:shrink-0 md:border-s border-white/10',
         )}>
 
-          {/* ── YouTube search + direct URL ──────────────────────── */}
-          <div className="shrink-0 px-3 py-2.5 border-b border-white/10">
-            <YoutubeSearch
-              onAdd={handleAddVideo}
-              isAdding={addMutation.isPending}
-              lang={lang}
-            />
-          </div>
+          {/* ── YouTube search + direct URL — only for users with control ── */}
+          {canControl && (
+            <div className="shrink-0 px-3 py-2.5 border-b border-white/10">
+              <YoutubeSearch
+                onAdd={handleAddVideo}
+                isAdding={addMutation.isPending}
+                lang={lang}
+              />
+            </div>
+          )}
 
           {/* Tabs */}
           <div className="flex border-b border-white/10 shrink-0">
