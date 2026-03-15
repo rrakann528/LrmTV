@@ -123,7 +123,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
 
 // ── Logout ────────────────────────────────────────────────────────────────────
 router.post("/auth/logout", (_req, res): void => {
-  res.clearCookie("token");
+  res.clearCookie("token", { path: '/', sameSite: 'lax', httpOnly: true });
   res.json({ ok: true });
 });
 
