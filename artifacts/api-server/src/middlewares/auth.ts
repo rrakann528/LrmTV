@@ -9,7 +9,7 @@ export interface AuthRequest extends Request {
 }
 
 export function requireAuth(req: AuthRequest, res: Response, next: NextFunction): void {
-  const token = req.cookies?.token || req.headers.authorization?.replace("Bearer ", "");
+  const token = req.headers.authorization?.replace("Bearer ", "") || req.cookies?.token;
   if (!token) {
     res.status(401).json({ error: "Unauthorized" });
     return;
@@ -25,7 +25,7 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
 }
 
 export function optionalAuth(req: AuthRequest, _res: Response, next: NextFunction): void {
-  const token = req.cookies?.token || req.headers.authorization?.replace("Bearer ", "");
+  const token = req.headers.authorization?.replace("Bearer ", "") || req.cookies?.token;
   if (token) {
     try {
       const payload = jwt.verify(token, JWT_SECRET) as { userId: number; username: string };
