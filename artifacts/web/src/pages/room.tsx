@@ -398,12 +398,23 @@ export default function RoomPage() {
               </div>
             )}
 
-            {/* Relay: Host "بث للغرفة" button — shown when admin/DJ has a video playing */}
-            {isDJ && syncState.url && !isRelaying && (
+            {/* Relay: Host "بث للغرفة" button — shown for HLS/MP4 streams only */}
+            {isDJ && syncState.url && !isRelaying &&
+             !['youtube','twitch','vimeo'].includes(detectSourceType(syncState.url)) && (
               <button
                 onClick={() => {
                   const el = playerRef.current?.getVideoElement();
-                  if (el) startRelay(el);
+                  if (!el) return;
+                  const result = startRelay(el);
+                  if (result === 'not-ready') {
+                    alert(lang === 'ar'
+                      ? 'انتظر حتى يبدأ الفيديو بالتشغيل ثم حاول مجدداً'
+                      : 'Wait for the video to start playing first');
+                  } else if (result === 'unsupported') {
+                    alert(lang === 'ar'
+                      ? 'متصفحك لا يدعم التقاط الفيديو — جرّب Chrome أو Firefox'
+                      : 'Your browser does not support video capture — try Chrome or Firefox');
+                  }
                 }}
                 className="absolute bottom-14 start-2 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-cyan-600/80 hover:bg-cyan-500 backdrop-blur text-white text-[11px] font-semibold transition-colors"
                 title={lang === 'ar' ? 'ابدأ البث المباشر للغرفة' : 'Relay stream to room'}

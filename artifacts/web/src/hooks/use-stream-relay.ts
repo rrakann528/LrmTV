@@ -14,36 +14,112 @@ export function useStreamRelay(socket: Socket | null) {
   const [relayHostSocketId, setRelayHostSocketId] = useState<string | null>(null);
   const [relayStream, setRelayStream] = useState<MediaStream | null>(null);
 
-  const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
+  const peersRef        = useRef<Map<string, RTCPeerConnection>>(new Map());
   const capturedStreamRef = useRef<MediaStream | null>(null);
+  const canvasRef       = useRef<HTMLCanvasElement | null>(null);
+  const animFrameRef    = useRef<number | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const audioCtxRef     = useRef<any>(null);
 
-  const closePeer = (id: string) => {
+  const closePeer = useCallback((id: string) => {
     const pc = peersRef.current.get(id);
     if (pc) { pc.close(); peersRef.current.delete(id); }
-  };
+  }, []);
 
-  // HOST: Start broadcasting the video element stream to the room
-  const startRelay = useCallback((videoEl: HTMLVideoElement) => {
-    if (!socket) return;
+  const stopCanvasCapture = useCallback(() => {
+    if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null; }
+    if (audioCtxRef.current) { try { audioCtxRef.current.close(); } catch { /* */ } audioCtxRef.current = null; }
+    canvasRef.current = null;
+  }, []);
+
+  /**
+   * Build a MediaStream from a <video> element.
+   * Strategy:
+   *   1. Try native captureStream() / mozCaptureStream() — Chrome, Firefox
+   *   2. Fall back to canvas.captureStream() — Safari iOS (captureStream on iOS 14.5+)
+   *      + Web Audio API for audio track
+   * Returns null if the video isn't ready yet (readyState < HAVE_CURRENT_DATA).
+   */
+  const buildStream = useCallback((videoEl: HTMLVideoElement): MediaStream | null => {
+    if (videoEl.readyState < 2) return null; // not ready yet
+
+    // ── Native captureStream (Chrome / Firefox) ────────────────────────────
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const stream: MediaStream | undefined = (videoEl as any).captureStream?.() ?? (videoEl as any).mozCaptureStream?.();
-    if (!stream) { console.warn('[Relay] captureStream not supported'); return; }
+    const native = (videoEl as any).captureStream?.() ?? (videoEl as any).mozCaptureStream?.();
+    if (native instanceof MediaStream) return native;
+
+    // ── Canvas fallback (Safari) ───────────────────────────────────────────
+    const w = videoEl.videoWidth  || 640;
+    const h = videoEl.videoHeight || 360;
+
+    const canvas = document.createElement('canvas');
+    canvas.width  = w;
+    canvas.height = h;
+    canvasRef.current = canvas;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    const draw = () => {
+      if (!canvasRef.current) return;
+      if (videoEl.videoWidth && videoEl.videoWidth !== canvas.width) {
+        canvas.width  = videoEl.videoWidth;
+        canvas.height = videoEl.videoHeight;
+      }
+      ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+      animFrameRef.current = requestAnimationFrame(draw);
+    };
+    animFrameRef.current = requestAnimationFrame(draw);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const canvasStream: MediaStream = (canvas as any).captureStream?.(30);
+    if (!canvasStream) { stopCanvasCapture(); return null; }
+
+    // Try to add audio via Web Audio API
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const AudioCtx = (window.AudioContext ?? (window as any).webkitAudioContext) as typeof AudioContext;
+      const audioCtx = new AudioCtx();
+      audioCtxRef.current = audioCtx;
+      const src  = audioCtx.createMediaElementSource(videoEl);
+      const dest = audioCtx.createMediaStreamDestination();
+      src.connect(dest);
+      src.connect(audioCtx.destination); // keep local audio
+      dest.stream.getAudioTracks().forEach(t => canvasStream.addTrack(t));
+    } catch (e) {
+      console.warn('[Relay] Audio capture unavailable (cross-origin or unsupported):', e);
+    }
+
+    return canvasStream;
+  }, [stopCanvasCapture]);
+
+  // HOST: Start broadcasting — returns 'ok' | 'not-ready' | 'unsupported'
+  const startRelay = useCallback((videoEl: HTMLVideoElement): 'ok' | 'not-ready' | 'unsupported' => {
+    if (!socket) return 'unsupported';
+
+    if (videoEl.readyState < 2) return 'not-ready';
+
+    const stream = buildStream(videoEl);
+    if (!stream) return 'unsupported';
+
     capturedStreamRef.current = stream;
     setIsRelaying(true);
     socket.emit('relay:advertise');
-  }, [socket]);
+    return 'ok';
+  }, [socket, buildStream]);
 
-  // HOST: Stop the relay
+  // HOST: Stop relay
   const stopRelay = useCallback(() => {
     if (!socket) return;
     setIsRelaying(false);
     capturedStreamRef.current = null;
+    stopCanvasCapture();
     peersRef.current.forEach(pc => pc.close());
     peersRef.current.clear();
     socket.emit('relay:stop');
-  }, [socket]);
+  }, [socket, stopCanvasCapture]);
 
-  // VIEWER: Join the relay from the host
+  // VIEWER: Request to receive relay
   const joinRelay = useCallback((hostSocketId: string) => {
     if (!socket) return;
     socket.emit('relay:request', { hostSocketId });
@@ -60,7 +136,7 @@ export function useStreamRelay(socket: Socket | null) {
   useEffect(() => {
     if (!socket) return;
 
-    // HOST receives: a viewer wants to watch the relay
+    // HOST: viewer wants to connect
     const onRelayRequest = async ({ viewerSocketId }: { viewerSocketId: string }) => {
       if (!capturedStreamRef.current) return;
       closePeer(viewerSocketId);
@@ -94,21 +170,21 @@ export function useStreamRelay(socket: Socket | null) {
       }
     };
 
-    // VIEWER receives: relay is now available
+    // VIEWER: relay advertised
     const onRelayAdvertise = ({ hostSocketId }: { hostSocketId: string }) => {
       setRelayHostSocketId(hostSocketId);
     };
 
     // Relay ended
     const onRelayStop = ({ hostSocketId }: { hostSocketId: string }) => {
-      if (capturedStreamRef.current) return; // we are the host, ignore
+      if (capturedStreamRef.current) return; // we are the host
       setRelayHostSocketId(prev => prev === hostSocketId ? null : prev);
       setRelayStream(null);
       peersRef.current.forEach(pc => pc.close());
       peersRef.current.clear();
     };
 
-    // WebRTC signaling — only handles relay-* types, ignores call types
+    // WebRTC signals — only handles relay-* types
     const onWebRTCSignal = async ({
       fromSocketId,
       signal,
@@ -120,14 +196,11 @@ export function useStreamRelay(socket: Socket | null) {
       type: string;
     }) => {
       if (type === 'relay-offer') {
-        // VIEWER receives offer from host — set up receiving peer
         closePeer(fromSocketId);
         const pc = new RTCPeerConnection(ICE_SERVERS);
         peersRef.current.set(fromSocketId, pc);
 
-        pc.ontrack = (e) => {
-          if (e.streams[0]) setRelayStream(e.streams[0]);
-        };
+        pc.ontrack = (e) => { if (e.streams[0]) setRelayStream(e.streams[0]); };
 
         pc.onicecandidate = (e) => {
           if (e.candidate) {
@@ -153,11 +226,10 @@ export function useStreamRelay(socket: Socket | null) {
         }
 
       } else if (type === 'relay-answer') {
-        // HOST receives answer from viewer
         const pc = peersRef.current.get(fromSocketId);
         if (pc) {
           try { await pc.setRemoteDescription(new RTCSessionDescription(signal)); }
-          catch (err) { console.error('[Relay] setRemoteDescription(answer) error', err); }
+          catch (err) { console.error('[Relay] setRemoteDescription(answer)', err); }
         }
 
       } else if (type === 'relay-ice') {
@@ -180,15 +252,23 @@ export function useStreamRelay(socket: Socket | null) {
       socket.off('relay:request',   onRelayRequest);
       socket.off('webrtc-signal',   onWebRTCSignal);
     };
-  }, [socket]);
+  }, [socket, closePeer]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       peersRef.current.forEach(pc => pc.close());
       peersRef.current.clear();
+      stopCanvasCapture();
     };
-  }, []);
+  }, [stopCanvasCapture]);
 
-  return { isRelaying, relayHostSocketId, relayStream, startRelay, stopRelay, joinRelay, leaveRelay };
+  return {
+    isRelaying,
+    relayHostSocketId,
+    relayStream,
+    startRelay,
+    stopRelay,
+    joinRelay,
+    leaveRelay,
+  };
 }
