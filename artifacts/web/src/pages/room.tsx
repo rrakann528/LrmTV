@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   MessageSquare, ListVideo, Users, UserPlus,
   Mic, MicOff, Video, VideoOff, Copy, Share2, Shield,
-  LogOut, LogIn,
+  LogOut, LogIn, Settings2,
 } from 'lucide-react';
 import { DraggableCam } from '@/components/draggable-cam';
 
@@ -74,6 +74,9 @@ export default function RoomPage() {
   const [copied, setCopied]     = useState(false);
   const [isSeeking]             = useState(false);
   const [playerReady, setPlayerReady] = useState(false);
+
+  // Room settings panel (admin only) — controlled from header button
+  const [showRoomSettings, setShowRoomSettings] = useState(false);
 
   // Confirmation dialog before enabling mic/camera
   const [mediaConfirm, setMediaConfirm] = useState<'mic' | 'camera' | null>(null);
@@ -341,6 +344,22 @@ export default function RoomPage() {
             <span className="hidden sm:inline">{copied ? t('copied') : t('copyLink')}</span>
           </button>
 
+          {/* Room Settings — admin only */}
+          {isAdmin && (
+            <button
+              onClick={() => { setShowRoomSettings(s => !s); setActiveTab('users'); }}
+              title={lang === 'ar' ? 'إعدادات الغرفة' : 'Room Settings'}
+              className={cn(
+                'h-8 w-8 flex items-center justify-center rounded-lg border border-white/10 transition-colors',
+                showRoomSettings
+                  ? 'bg-primary/20 border-primary/40 text-primary'
+                  : 'bg-white/5 text-white/70 hover:text-white hover:bg-white/10',
+              )}
+            >
+              <Settings2 className="w-4 h-4" />
+            </button>
+          )}
+
           {/* Mic / Camera */}
           <div className="flex bg-white/5 rounded-lg border border-white/10 p-0.5">
             <button
@@ -561,6 +580,8 @@ export default function RoomPage() {
                   renameRoom={renameRoom}
                   onUserClick={(username, userId) => setRoomProfile({ username, userId })}
                   deleteRoom={isAdmin ? handleDeleteRoom : undefined}
+                  showSettings={showRoomSettings}
+                  onCloseSettings={() => setShowRoomSettings(false)}
                 />
               )}
               {activeTab === 'friends' && (

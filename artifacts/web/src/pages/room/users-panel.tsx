@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Shield, Headphones, Crown, Settings2,
+  Shield, Headphones, Crown,
   Users, Lock, Unlock, RefreshCw, ChevronLeft, Pencil, Check,
   MoreHorizontal, UserCircle, ShieldCheck, LogOut, X,
   Globe, EyeOff, MessageSquareOff, MessageSquare, Mic, MicOff, Video, VideoOff,
@@ -38,6 +38,8 @@ interface UsersPanelProps {
   renameRoom?: (name: string) => void;
   onUserClick?: (username: string, userId?: number) => void;
   deleteRoom?: () => void;
+  showSettings?: boolean;
+  onCloseSettings?: () => void;
 }
 
 export default function UsersPanel({
@@ -47,13 +49,21 @@ export default function UsersPanel({
   toggleDJ, kickUser, transferAdmin,
   requestSync, currentRoomName = '', renameRoom, onUserClick,
   deleteRoom,
+  showSettings: externalShowSettings = false,
+  onCloseSettings,
 }: UsersPanelProps) {
   const { t, lang } = useI18n();
-  const [showSettings, setShowSettings] = useState(false);
+  const [showSettings, setShowSettings] = useState(externalShowSettings);
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [adminSheetUser, setAdminSheetUser] = useState<RoomUser | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // Sync external showSettings prop → internal state
+  useEffect(() => { setShowSettings(externalShowSettings); }, [externalShowSettings]);
+
+  const handleCloseSettings = () => { setShowSettings(false); onCloseSettings?.(); };
+
   const handleRenameSubmit = () => {
     if (nameInput.trim() && renameRoom) renameRoom(nameInput.trim());
     setEditingName(false);
@@ -75,7 +85,7 @@ export default function UsersPanel({
               key="back"
               initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }}
               className="flex items-center gap-1.5 text-sm text-white/60 hover:text-white transition"
-              onClick={() => setShowSettings(false)}
+              onClick={handleCloseSettings}
             >
               <ChevronLeft className="w-4 h-4" />
               {(lang === 'ar') ? 'المستخدمون' : 'Users'}
@@ -92,29 +102,13 @@ export default function UsersPanel({
           )}
         </AnimatePresence>
 
-        <div className="flex items-center gap-1">
-          <button
-            onClick={requestSync}
-            title={(lang === 'ar') ? 'مزامنة الآن' : 'Sync now'}
-            className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
-          {isAdmin && (
-            <button
-              onClick={() => setShowSettings(s => !s)}
-              className={cn(
-                'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition',
-                showSettings
-                  ? 'bg-primary/20 text-primary'
-                  : 'text-white/40 hover:text-white hover:bg-white/10',
-              )}
-            >
-              <Settings2 className="w-3.5 h-3.5" />
-              {(lang === 'ar') ? 'الإعدادات' : 'Settings'}
-            </button>
-          )}
-        </div>
+        <button
+          onClick={requestSync}
+          title={(lang === 'ar') ? 'مزامنة الآن' : 'Sync now'}
+          className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition"
+        >
+          <RefreshCw className="w-4 h-4" />
+        </button>
       </div>
 
       <AnimatePresence mode="wait">
