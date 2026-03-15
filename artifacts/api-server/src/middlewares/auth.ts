@@ -9,6 +9,11 @@ export interface AuthRequest extends Request {
 }
 
 export function requireAuth(req: AuthRequest, res: Response, next: NextFunction): void {
+  if (!JWT_SECRET) {
+    console.error('[auth] JWT_SECRET is not set — rejecting request');
+    res.status(500).json({ error: "Server misconfiguration: JWT_SECRET not set" });
+    return;
+  }
   const token = req.cookies?.token || req.headers.authorization?.replace("Bearer ", "");
   if (!token) {
     res.status(401).json({ error: "Unauthorized" });

@@ -7,6 +7,15 @@ import { z } from "zod";
 
 const router: IRouter = Router();
 
+const isProd = process.env.NODE_ENV === 'production';
+const COOKIE_OPTS = {
+  httpOnly: true,
+  sameSite: 'lax' as const,
+  secure: isProd,
+  maxAge: 30 * 24 * 60 * 60 * 1000,
+  path: '/',
+};
+
 function userPublic(u: typeof usersTable.$inferSelect) {
   return {
     id: u.id,
@@ -59,7 +68,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     }).returning();
 
     const token = signToken(user.id, user.username);
-    res.cookie("token", token, { httpOnly: true, sameSite: "lax", maxAge: 30 * 24 * 60 * 60 * 1000, path: "/" });
+    res.cookie("token", token, COOKIE_OPTS);
     res.status(201).json({ ...userPublic(user), token });
   } catch (err: any) {
     console.error("[register]", err?.message || err);
@@ -108,7 +117,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   if (!valid) { res.status(401).json({ error: "اسم المستخدم أو كلمة المرور غير صحيحة" }); return; }
 
   const token = signToken(user.id, user.username);
-  res.cookie("token", token, { httpOnly: true, sameSite: "lax", maxAge: 30 * 24 * 60 * 60 * 1000, path: "/" });
+  res.cookie("token", token, COOKIE_OPTS);
   res.json({ ...userPublic(user), token });
 });
 
@@ -123,7 +132,7 @@ router.get("/auth/me", requireAuth, async (req: AuthRequest, res): Promise<void>
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!)).limit(1);
   if (!user) { res.status(404).json({ error: "Not found" }); return; }
   const freshToken = signToken(user.id, user.username);
-  res.cookie("token", freshToken, { httpOnly: true, sameSite: "lax", maxAge: 30 * 24 * 60 * 60 * 1000, path: "/" });
+  res.cookie("token", freshToken, COOKIE_OPTS);
   res.json({ ...userPublic(user), token: freshToken });
 });
 

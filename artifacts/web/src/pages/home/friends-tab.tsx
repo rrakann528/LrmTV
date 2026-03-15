@@ -77,11 +77,11 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
   const [sentIds, setSentIds] = useState<Set<number>>(new Set());
   const [requestError, setRequestError] = useState<string | null>(null);
 
-  const { data: friends = [], isLoading, isError: friendsError } = useQuery<FriendUser[]>({
+  const { data: friends = [], isLoading, isFetching, isError: friendsError, refetch: refetchFriends } = useQuery<FriendUser[]>({
     queryKey: ['friends'],
     queryFn: fetchFriends,
     enabled: !!user,
-    refetchInterval: 10_000,
+    refetchInterval: subTab === 'requests' ? 5_000 : 10_000,
     refetchOnMount: true,
     refetchOnWindowFocus: true,
     retry: 2,
@@ -331,7 +331,31 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
         {/* ── Requests ─────────────────────────────────────────────── */}
         {!friendsError && subTab === 'requests' && (
           <>
-            {pendingReceived.length > 0 && (
+            {/* Refresh button */}
+            <div className="flex items-center justify-between pb-1">
+              <span className="text-xs text-muted-foreground/60">
+                {isFetching && !isLoading ? 'جاري التحديث...' : ''}
+              </span>
+              <button
+                onClick={() => refetchFriends()}
+                disabled={isFetching}
+                className="flex items-center gap-1 text-xs text-primary/70 hover:text-primary active:scale-95 transition-all disabled:opacity-40"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+                تحديث
+              </button>
+            </div>
+
+            {/* Loading skeleton for requests */}
+            {isLoading && (
+              <>
+                {Array.from({ length: 2 }).map((_, i) => (
+                  <div key={i} className="h-16 bg-muted/40 rounded-2xl animate-pulse" />
+                ))}
+              </>
+            )}
+
+            {!isLoading && pendingReceived.length > 0 && (
               <>
                 <p className="text-xs font-semibold text-muted-foreground py-1">طلبات واردة</p>
                 {pendingReceived.map(f => (
@@ -395,10 +419,11 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
                 ))}
               </>
             )}
-            {pendingReceived.length === 0 && pendingSent.length === 0 && (
+            {!isLoading && pendingReceived.length === 0 && pendingSent.length === 0 && (
               <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                 <Bell className="w-12 h-12 mb-3 opacity-30" />
                 <p className="text-sm">لا توجد طلبات</p>
+                <p className="text-xs text-muted-foreground/40 mt-1">يتحدث كل 5 ثوانٍ تلقائياً</p>
               </div>
             )}
           </>
