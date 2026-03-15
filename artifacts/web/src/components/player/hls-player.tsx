@@ -408,16 +408,28 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
       //   S2 native <video>  — no CORS restriction, works for IP-locked streams on any Safari
       //   S3 CF manifest     — manifest via CF (CORS headers added), segments direct
       //   S4 CF full proxy   — everything via CF (for fully CORS-blocked, non-IP-locked streams)
+      //   S5 API server proxy — manifest + segments via our own API (handles HTTP→HTTPS, always available)
       const loadViaHls = () => {
         if (cancelled) return;
+
+        // S5 — API server manifest proxy (last resort — handles HTTP streams & bypasses mixed content)
+        const s5_apiProxy = () => {
+          if (cancelled) return;
+          setStatusMsg('hls-proxy');
+          const proxyUrl = `/api/proxy/manifest?url=${encodeURIComponent(src)}`;
+          const hls = makeHls(() => { setError('ip-locked'); setStatusMsg(null); });
+          hlsRef.current = hls;
+          hls.loadSource(proxyUrl);
+          hls.attachMedia(video);
+        };
 
         // S4 — full proxy via CF Worker (all segments through CF)
         const s4_cfFullProxy = () => {
           if (cancelled) return;
           const cfUrl = buildCfUrl(src);
-          if (!cfUrl) { setError('ip-locked'); setStatusMsg(null); return; }
+          if (!cfUrl) { s5_apiProxy(); return; }
           setStatusMsg('hls-proxy');
-          const hls = makeHls(() => { setError('ip-locked'); setStatusMsg(null); });
+          const hls = makeHls(() => s5_apiProxy());
           hlsRef.current = hls;
           hls.loadSource(cfUrl);
           hls.attachMedia(video);

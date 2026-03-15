@@ -66,4 +66,106 @@ router.get('/proxy/detect', async (req, res) => {
 
 router.options('/proxy/detect', (_req, res) => { res.set(CORS_HEADERS).sendStatus(204); });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/proxy/manifest?url=<encoded>
+//
+// Fetches an HLS manifest server-side (bypasses mixed-content & CORS),
+// rewrites all relative segment/playlist URIs to absolute URLs, then
+// rewrites those absolute URLs to go through /api/proxy/segment so the
+// browser never needs to make a direct HTTP request to the upstream CDN.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/proxy/manifest', async (req, res) => {
+  const rawUrl = req.query.url as string | undefined;
+  if (!rawUrl) { res.status(400).send('Missing url'); return; }
+
+  let targetUrl: string;
+  try { targetUrl = decodeURIComponent(rawUrl); new URL(targetUrl); }
+  catch { res.status(400).send('Invalid url'); return; }
+
+  try {
+    const headers = buildRequestHeaders(req, targetUrl, '');
+    const upstream = await fetch(targetUrl, { headers, redirect: 'follow', signal: AbortSignal.timeout(10000) });
+    if (!upstream.ok) { res.status(upstream.status).send('Upstream error'); return; }
+
+    const text = await upstream.text();
+
+    // Base directory of the manifest URL (for resolving relative URIs)
+    const baseDir = targetUrl.substring(0, targetUrl.lastIndexOf('/') + 1);
+
+    const rewritten = text.split('\n').map(line => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) return line;
+
+      // Make the URI absolute
+      const absolute = trimmed.startsWith('http')
+        ? trimmed
+        : new URL(trimmed, baseDir).href;
+
+      // Route through our segment proxy (handles HTTP→HTTPS and CORS)
+      return `/api/proxy/segment?url=${encodeURIComponent(absolute)}`;
+    }).join('\n');
+
+    res.set({
+      ...CORS_HEADERS,
+      'Content-Type': 'application/vnd.apple.mpegurl',
+      'Cache-Control': 'no-cache, no-store',
+    }).send(rewritten);
+  } catch {
+    res.status(502).send('Manifest proxy error');
+  }
+});
+
+router.options('/proxy/manifest', (_req, res) => { res.set(CORS_HEADERS).sendStatus(204); });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/proxy/segment?url=<encoded>
+//
+// Streams a single TS segment (or sub-playlist) from the upstream CDN to
+// the browser.  Used by /api/proxy/manifest to serve HTTP content over HTTPS.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/proxy/segment', async (req, res) => {
+  const rawUrl = req.query.url as string | undefined;
+  if (!rawUrl) { res.status(400).send('Missing url'); return; }
+
+  let targetUrl: string;
+  try { targetUrl = decodeURIComponent(rawUrl); new URL(targetUrl); }
+  catch { res.status(400).send('Invalid url'); return; }
+
+  // Sub-playlists (.m3u8) must also be rewritten
+  const isPlaylist = targetUrl.toLowerCase().includes('.m3u8') || targetUrl.toLowerCase().includes('m3u8');
+
+  try {
+    const headers = buildRequestHeaders(req, targetUrl, '');
+    const upstream = await fetch(targetUrl, { headers, redirect: 'follow', signal: AbortSignal.timeout(20000) });
+    if (!upstream.ok) { res.status(upstream.status).send('Upstream error'); return; }
+
+    if (isPlaylist) {
+      // Rewrite sub-playlist the same way as the main manifest
+      const text = await upstream.text();
+      const baseDir = targetUrl.substring(0, targetUrl.lastIndexOf('/') + 1);
+      const rewritten = text.split('\n').map(line => {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) return line;
+        const absolute = trimmed.startsWith('http') ? trimmed : new URL(trimmed, baseDir).href;
+        return `/api/proxy/segment?url=${encodeURIComponent(absolute)}`;
+      }).join('\n');
+      res.set({ ...CORS_HEADERS, 'Content-Type': 'application/vnd.apple.mpegurl', 'Cache-Control': 'no-cache' }).send(rewritten);
+      return;
+    }
+
+    const contentType = upstream.headers.get('content-type') ?? 'video/mp2t';
+    const buf = Buffer.from(await upstream.arrayBuffer());
+    res.set({
+      ...CORS_HEADERS,
+      'Content-Type': contentType,
+      'Content-Length': String(buf.length),
+      'Cache-Control': 'max-age=30',
+    }).send(buf);
+  } catch {
+    res.status(502).send('Segment proxy error');
+  }
+});
+
+router.options('/proxy/segment', (_req, res) => { res.set(CORS_HEADERS).sendStatus(204); });
+
 export default router;
