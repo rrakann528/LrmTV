@@ -21,13 +21,23 @@ export default function LandingPage() {
   const [, setLocation] = useLocation();
   const { user, loading } = useAuth();
 
+  // If user is already known (from cache or API), redirect immediately
+  if (user) {
+    setLocation('/home');
+    return null;
+  }
+
   useEffect(() => {
     if (!loading && user) setLocation('/home');
   }, [user, loading]);
 
+  // While checking auth (and no cached user), show a neutral splash
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background gap-4">
+        <div className="w-16 h-16 rounded-2xl bg-primary/20 border border-primary/30 flex items-center justify-center shadow-lg shadow-primary/20">
+          <Tv className="w-8 h-8 text-primary" />
+        </div>
         <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
       </div>
     );

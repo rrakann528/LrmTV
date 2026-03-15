@@ -12,6 +12,23 @@ export interface AuthUser {
 }
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+const CACHE_KEY = 'lrmtv_auth_user';
+
+function readCache(): AuthUser | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    return raw ? (JSON.parse(raw) as AuthUser) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(u: AuthUser | null) {
+  try {
+    if (u) localStorage.setItem(CACHE_KEY, JSON.stringify(u));
+    else localStorage.removeItem(CACHE_KEY);
+  } catch {}
+}
 
 export async function apiFetch(path: string, opts?: RequestInit) {
   return fetch(`${BASE}/api${path}`, {
@@ -22,14 +39,27 @@ export async function apiFetch(path: string, opts?: RequestInit) {
 }
 
 export function useAuth() {
-  const [user, setUser] = useState<AuthUser | null | undefined>(undefined);
-  const [loading, setLoading] = useState(true);
+  // Initialise from cache so components can render immediately without spinner
+  const cached = readCache();
+  const [user, setUserState] = useState<AuthUser | null | undefined>(cached ?? undefined);
+  // If we have a cached user, we're not "loading" from UI perspective
+  const [loading, setLoading] = useState(!cached);
+
+  const setUser = useCallback((u: AuthUser | null | undefined) => {
+    setUserState(u);
+    if (u === undefined) return;
+    writeCache(u ?? null);
+  }, []);
 
   useEffect(() => {
     apiFetch('/auth/me')
       .then(r => r.ok ? r.json() : null)
-      .then(setUser)
-      .catch(() => setUser(null))
+      .then((freshUser: AuthUser | null) => {
+        setUser(freshUser);
+      })
+      .catch(() => {
+        // Network error — keep cached user rather than logging out
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -51,7 +81,8 @@ export function useAuth() {
 
   const logout = useCallback(async () => {
     await apiFetch('/auth/logout', { method: 'POST' });
-    setUser(null);
+    writeCache(null);
+    setUserState(null);
   }, []);
 
   const updateProfile = useCallback(async (updates: {
