@@ -142,6 +142,10 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
     useEffect(() => { initialTimeRef.current = initialTime; }, [initialTime]);
     // Fire onReady only once per src load (reset in the load effect)
     const readyFiredRef = useRef(false);
+    // Synchronous live flag (React state is async — closures need a ref)
+    const isLiveRef = useRef(false);
+    // Buffering overlay: true while waiting for first playable frame after seek
+    const [buffering, setBuffering] = useState(true);
     const [statusMsg, setStatusMsg] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [retryKey, setRetryKey] = useState(0);
@@ -245,14 +249,21 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
       if (reconnTimerRef.current) { clearTimeout(reconnTimerRef.current); reconnTimerRef.current = null; }
 
       readyFiredRef.current = false;
+      isLiveRef.current = false;
+      setBuffering(true);
       let cancelled = false;
+
+      // Clear buffering spinner as soon as the browser can play the stream
+      const onCanPlay = () => { if (!cancelled) setBuffering(false); };
+      video.addEventListener('canplay', onCanPlay);
 
       // Called once the player has loaded enough to seek — seeks to initialTime then fires onReady
       const signalReady = () => {
         if (cancelled || readyFiredRef.current) return;
         readyFiredRef.current = true;
         const targetTime = initialTimeRef.current;
-        if (targetTime > 2 && video) {
+        // For live streams skip seek entirely — just play from the live edge
+        if (!isLiveRef.current && targetTime > 2 && video) {
           video.currentTime = targetTime;
         }
         onReadyRef.current?.();
@@ -271,13 +282,25 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
       // ── Duration / live detection ─────────────────────────────────────────
       const onDurationChange = () => {
         const d = video.duration;
-        if (!isNaN(d)) setIsLive(!d || !isFinite(d) || d === Infinity);
+        if (!isNaN(d)) {
+          const live = !d || !isFinite(d) || d === Infinity;
+          isLiveRef.current = live;
+          setIsLive(live);
+        }
       };
       video.addEventListener('durationchange', onDurationChange);
+
+      // Capture startPosition at load time — tells HLS.js to begin fetching
+      // from this position directly instead of starting at 0 then seeking.
+      const startPos = initialTimeRef.current > 2 ? initialTimeRef.current : -1;
 
       const HLS_CONFIG: Partial<Hls['config']> = {
         enableWorker: true,
         lowLatencyMode: false,
+        // Start loading from the join-time position — avoids seek-after-manifest overhead
+        startPosition: startPos,
+        // Pre-fetch the first fragment while manifest is still being processed
+        startFragPrefetch: true,
 
         // ── Live latency tuning ───────────────────────────────────────────────
         // Target 2 segments behind live edge instead of the default 3 →
@@ -325,7 +348,13 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
         video.setAttribute('referrerpolicy', 'no-referrer');
         const targetSrc = nativeSrc ?? src;
         video.src = targetSrc;
-        const onMeta = () => { if (!cancelled) { setIsLive(!isFinite(video.duration) || video.duration === Infinity); setStatusMsg(null); setError(null); signalReady(); } };
+        const onMeta = () => {
+          if (!cancelled) {
+            const live = !isFinite(video.duration) || video.duration === Infinity;
+            isLiveRef.current = live; setIsLive(live);
+            setStatusMsg(null); setError(null); signalReady();
+          }
+        };
         const onErr  = () => {
           if (cancelled) return;
           // If direct load failed and we haven't tried CF proxy yet, try through it
@@ -447,6 +476,13 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
         });
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           if (cancelled) return;
+          // Resolve live status synchronously before signalReady so the seek decision is correct
+          const d = video.duration;
+          if (!isNaN(d)) {
+            const live = !d || !isFinite(d) || d === Infinity;
+            isLiveRef.current = live;
+            setIsLive(live);
+          }
           setStatusMsg(null); setError(null);
           setSubtitleTracks(hls.subtitleTracks.map((tk, i) => ({ id: i, name: tk.name || tk.lang || `Track ${i + 1}`, lang: tk.lang })));
           startStallWatchdog();
@@ -514,7 +550,11 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
           video.src = src;
           video.load();
           const onMeta = () => {
-            if (!cancelled) { setIsLive(!isFinite(video.duration) || video.duration === Infinity); onDurationChange(); setStatusMsg(null); setError(null); startStallWatchdog(); signalReady(); }
+            if (!cancelled) {
+              const live = !isFinite(video.duration) || video.duration === Infinity;
+              isLiveRef.current = live; setIsLive(live);
+              onDurationChange(); setStatusMsg(null); setError(null); startStallWatchdog(); signalReady();
+            }
           };
           const onErr = () => {
             if (!cancelled) s3_cfManifestProxy();
@@ -591,6 +631,7 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
         if (reconnTimerRef.current) { clearTimeout(reconnTimerRef.current); reconnTimerRef.current = null; }
         if (stallWatchdog) { clearInterval(stallWatchdog); stallWatchdog = null; }
         video.removeEventListener('durationchange', onDurationChange);
+        video.removeEventListener('canplay', onCanPlay);
         destroyAll();
       };
     }, [src, retryKey]);
@@ -665,13 +706,15 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
 
     return (
       <>
-        {/* Loading status indicator */}
-        {statusMsg && !error && (
+        {/* Loading / buffering spinner — shown from first load until canplay fires */}
+        {(statusMsg || buffering) && !error && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-20">
             <div className="text-center space-y-3">
               <Loader2 className="w-10 h-10 text-white/70 mx-auto animate-spin" />
               <p className="text-white/70 text-sm">
-                {statusLabel[statusMsg]?.[lang] ?? (lang === 'ar' ? 'جارٍ التحميل…' : 'Loading…')}
+                {statusMsg
+                  ? (statusLabel[statusMsg]?.[lang] ?? (lang === 'ar' ? 'جارٍ التحميل…' : 'Loading…'))
+                  : (lang === 'ar' ? 'جارٍ التحميل…' : 'Loading…')}
               </p>
             </div>
           </div>
