@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Search, UserPlus, MessageCircle, Check, X, Bell, Users, Send, MoreVertical, UserMinus, BellOff, Bell as BellOn } from 'lucide-react';
+import { Search, UserPlus, MessageCircle, Check, X, Clock, Bell, Users, Send, MoreVertical, UserMinus, BellOff, Bell as BellOn } from 'lucide-react';
 import { Avatar } from '@/components/avatar';
 import { useAuth, apiFetch } from '@/hooks/use-auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -132,7 +132,10 @@ export function FriendsTab() {
 
   const requestMut = useMutation({
     mutationFn: (addresseeId: number) => apiFetch('/friends/request', { method: 'POST', body: JSON.stringify({ addresseeId }) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['friends'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['friends'] });
+      qc.invalidateQueries({ queryKey: ['friends-badge'] });
+    },
   });
 
   const respondMut = useMutation({
@@ -191,14 +194,23 @@ export function FriendsTab() {
       {subTab === 'search' && (
         <div className="px-4 mb-3">
           <div className="relative">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             <input
               value={searchQ}
               onChange={e => setSearchQ(e.target.value)}
               placeholder="ابحث باسم المستخدم..."
-              className="w-full bg-muted/50 border border-border rounded-xl pl-4 pr-10 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              className="w-full bg-muted/50 border border-border rounded-2xl pl-9 pr-10 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all"
               dir="rtl"
+              autoFocus
             />
+            {searchQ.length > 0 && (
+              <button
+                onClick={() => setSearchQ('')}
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-muted-foreground/20 flex items-center justify-center hover:bg-muted-foreground/30 transition-colors"
+              >
+                <X className="w-3 h-3 text-muted-foreground" />
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -296,45 +308,111 @@ export function FriendsTab() {
         {subTab === 'search' && (
           <>
             {searching && (
-              <div className="flex justify-center py-6">
-                <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              <div className="flex justify-center py-8">
+                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
               </div>
             )}
+
             {!searching && searchQ.length >= 2 && searchResults.length === 0 && (
-              <div className="text-center py-10 text-muted-foreground text-sm">لا توجد نتائج</div>
+              <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center mb-3">
+                  <Search className="w-7 h-7 opacity-30" />
+                </div>
+                <p className="text-sm font-medium">لا توجد نتائج</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">جرّب اسماً مختلفاً</p>
+              </div>
             )}
+
             {searchResults.map(u => {
-              const isSelf = u.id === user.id;
-              const alreadyFriend = friends.some(f => f.id === u.id);
+              const isSelf          = u.id === user.id;
+              const existing        = friends.find(f => f.id === u.id);
+              const status          = existing?.status ?? 'none';
+              const friendshipId    = existing?.friendshipId;
+              const name            = u.displayName || u.username;
+
               return (
-                <div key={u.id} className="flex items-center gap-3 bg-card border border-border rounded-2xl p-3">
-                  <button onClick={() => setProfileUserId(u.id)} className="flex-shrink-0">
-                    <Avatar name={u.displayName || u.username} color={u.avatarColor} url={u.avatarUrl} size={44} />
+                <div key={u.id} className="flex items-center gap-3 bg-card border border-border rounded-2xl p-3 hover:bg-muted/30 transition-colors">
+                  {/* Avatar — opens profile */}
+                  <button
+                    onClick={() => setProfileUserId(u.id)}
+                    className="flex-shrink-0 active:scale-95 transition-transform"
+                  >
+                    <Avatar name={name} color={u.avatarColor} url={u.avatarUrl} size={48} />
                   </button>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm text-foreground truncate">{u.displayName || u.username}</p>
+
+                  {/* Name — opens profile */}
+                  <button
+                    onClick={() => setProfileUserId(u.id)}
+                    className="flex-1 min-w-0 text-right active:opacity-70 transition-opacity"
+                  >
+                    <p className="font-semibold text-sm text-foreground truncate">{name}</p>
                     <p className="text-xs text-muted-foreground">@{u.username}</p>
-                  </div>
+                  </button>
+
+                  {/* Action */}
                   {!isSelf && (
-                    alreadyFriend
-                      ? <span className="text-xs text-green-500 font-medium">صديق ✓</span>
-                      : (
+                    <>
+                      {status === 'none' && (
                         <button
                           onClick={() => requestMut.mutate(u.id)}
-                          disabled={requestMut.isPending}
-                          className="w-9 h-9 bg-primary/20 rounded-xl flex items-center justify-center"
+                          disabled={requestMut.isPending && requestMut.variables === u.id}
+                          className="flex items-center gap-1.5 px-3.5 py-2 bg-primary text-primary-foreground rounded-xl text-xs font-bold active:scale-95 transition-all disabled:opacity-60 shrink-0"
                         >
-                          <UserPlus className="w-4 h-4 text-primary" />
+                          {requestMut.isPending && requestMut.variables === u.id
+                            ? <div className="w-3.5 h-3.5 border-2 border-primary-foreground/50 border-t-transparent rounded-full animate-spin" />
+                            : <UserPlus className="w-3.5 h-3.5" />
+                          }
+                          إضافة
                         </button>
-                      )
+                      )}
+                      {status === 'pending_sent' && (
+                        <span className="flex items-center gap-1.5 px-3 py-2 bg-muted text-muted-foreground rounded-xl text-xs font-medium shrink-0">
+                          <Clock className="w-3.5 h-3.5" />
+                          في الانتظار
+                        </span>
+                      )}
+                      {status === 'accepted' && (
+                        <span className="flex items-center gap-1.5 px-3 py-2 bg-green-500/10 text-green-500 rounded-xl text-xs font-bold shrink-0">
+                          <Check className="w-3.5 h-3.5" />
+                          صديق
+                        </span>
+                      )}
+                      {status === 'pending_received' && (
+                        <div className="flex gap-1.5 shrink-0">
+                          <button
+                            onClick={() => friendshipId && respondMut.mutate({ id: friendshipId, action: 'accepted' })}
+                            disabled={respondMut.isPending}
+                            className="w-8 h-8 bg-green-500/15 rounded-xl flex items-center justify-center active:scale-95 transition-all"
+                            title="قبول"
+                          >
+                            <Check className="w-4 h-4 text-green-500" />
+                          </button>
+                          <button
+                            onClick={() => friendshipId && respondMut.mutate({ id: friendshipId, action: 'rejected' })}
+                            disabled={respondMut.isPending}
+                            className="w-8 h-8 bg-destructive/10 rounded-xl flex items-center justify-center active:scale-95 transition-all"
+                            title="رفض"
+                          >
+                            <X className="w-4 h-4 text-destructive" />
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {isSelf && (
+                    <span className="px-3 py-2 bg-primary/10 text-primary rounded-xl text-xs font-bold shrink-0">أنت</span>
                   )}
                 </div>
               );
             })}
+
             {searchQ.length < 2 && !searching && (
               <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-                <Search className="w-12 h-12 mb-3 opacity-30" />
-                <p className="text-sm">ابحث باسم المستخدم</p>
+                <div className="w-20 h-20 rounded-full bg-muted/50 flex items-center justify-center mb-4">
+                  <Search className="w-9 h-9 opacity-25" />
+                </div>
+                <p className="text-sm font-medium">ابحث عن أصدقاء</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">اكتب اسم المستخدم للبحث</p>
               </div>
             )}
           </>
