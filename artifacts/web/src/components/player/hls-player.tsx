@@ -7,6 +7,7 @@ import React, {
   useCallback,
 } from 'react';
 import Hls from 'hls.js';
+import type { Socket } from 'socket.io-client';
 import { Play, AlertTriangle, RotateCcw, Loader2 } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { onFullscreenChange } from '@/lib/fullscreen';
@@ -14,6 +15,7 @@ import PlayerControls, { type SubtitleTrack, type ToastMessage } from './player-
 import FullscreenChat from './fullscreen-chat';
 import SubtitleSearch from './subtitle-search';
 import { type ChatMessage } from './smart-player';
+import { setRelaySocket, createRelayLoader } from '@/lib/relay-loader';
 
 // ── SRT / VTT parser ─────────────────────────────────────────────────────────
 interface SubtitleCue { start: number; end: number; text: string }
@@ -105,6 +107,8 @@ interface HlsPlayerProps {
   isLiveHint?: boolean;
   /** Fired after the manifest loads and live/VOD status is determined */
   onIsLive?: (isLive: boolean) => void;
+  /** Socket.io socket — enables relay fallback for IP-locked streams */
+  socket?: Socket | null;
 }
 
 export interface HlsPlayerHandle {
@@ -136,6 +140,7 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
       externalSubtitle,
       isLiveHint = false,
       onIsLive,
+      socket = null,
     },
     ref,
   ) => {
@@ -194,6 +199,12 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
       }, 200);
       return () => { if (subtitleIntervalRef.current) clearInterval(subtitleIntervalRef.current); };
     }, [customSubtitleCues]);
+
+    // Keep relay socket in sync with the module-level reference
+    useEffect(() => {
+      setRelaySocket(socket ?? null);
+      return () => { setRelaySocket(null); };
+    }, [socket]);
 
     const handleApplySubtitle = useCallback((raw: string, label: string, sourceUrl?: string) => {
       const cues = parseSubtitles(raw);
@@ -642,13 +653,43 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
           video.addEventListener('error',          onErr,  { once: true });
         };
 
+        // S-Relay — socket relay via room host browser (last resort for IP-locked streams)
+        // The custom relay loader intercepts CORS/403 errors and fetches via host's socket
+        const sRelay = () => {
+          if (cancelled) return;
+          const RelayLoader = createRelayLoader();
+          setStatusMsg('hls-proxy');
+          const relayCfg = { ...HLS_CONFIG, loader: RelayLoader as unknown as Hls['config']['loader'] };
+          const hls = new Hls(relayCfg as Hls['config']);
+          hls.on(Hls.Events.ERROR, (_, d) => {
+            if (cancelled || !d.fatal) return;
+            hls.destroy();
+            setError('ip-locked'); setStatusMsg(null);
+          });
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            if (cancelled) return;
+            const d = video.duration;
+            if (!isNaN(d)) {
+              const live = !d || !isFinite(d) || d === Infinity;
+              isLiveRef.current = live; setIsLive(live);
+              onIsLiveRef.current?.(live);
+            }
+            setStatusMsg(null); setError(null);
+            setSubtitleTracks(hls.subtitleTracks.map((tk, i) => ({ id: i, name: tk.name || tk.lang || `Track ${i + 1}`, lang: tk.lang })));
+            startStallWatchdog();
+          });
+          hlsRef.current = hls;
+          hls.loadSource(src);
+          hls.attachMedia(video);
+        };
+
         // S5 — API server manifest proxy (server-side fetch bypasses CORS; segments routed via /api/proxy/segment)
         const s5_apiProxy = () => {
           if (cancelled) return;
           setStatusMsg('hls-proxy');
           const proxyUrl = `/api/proxy/manifest?url=${encodeURIComponent(src)}`;
-          // On failure fall through to S2 (native video — last resort for IP-locked streams)
-          const hls = makeHls(() => s2_native());
+          // On failure → try socket relay (host's browser has correct IP) → fallback to native
+          const hls = makeHls(() => sRelay());
           hlsRef.current = hls;
           hls.loadSource(proxyUrl);
           hls.attachMedia(video);
