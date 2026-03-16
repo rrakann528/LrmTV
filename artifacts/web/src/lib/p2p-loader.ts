@@ -112,8 +112,13 @@ export function createP2PLoader() {
           stats.tfirst = stats.tload = performance.now();
           stats.loaded = stats.total = data.byteLength;
           try {
+            // HLS.js expects string for manifest/level types, ArrayBuffer for fragments
+            const ctxType = (context.type as string) ?? '';
+            const isText = ctxType === 'manifest' || ctxType === 'level' ||
+              ctxType === 'audioTrack' || ctxType === 'subtitle';
+            const payload = isText ? new TextDecoder('utf-8').decode(data) : data;
             (callbacks.onSuccess as (r: unknown, s: unknown, c: unknown, n: null) => void)(
-              { url, data }, stats, context, null,
+              { url, data: payload }, stats, context, null,
             );
           } catch {
             onErr({ code: 0, text: 'P2P parse error' }, context, null, stats);
