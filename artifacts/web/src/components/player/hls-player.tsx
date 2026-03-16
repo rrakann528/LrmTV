@@ -839,16 +839,23 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
 
     return (
       <>
-        {/* Loading / buffering spinner — shown from first load until canplay fires */}
-        {(statusMsg || buffering) && !error && (
+        {/* Initial load overlay — full screen, only while statusMsg is set (before manifest parsed) */}
+        {statusMsg && !error && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-20">
             <div className="text-center space-y-3">
               <Loader2 className="w-10 h-10 text-white/70 mx-auto animate-spin" />
               <p className="text-white/70 text-sm">
-                {statusMsg
-                  ? (statusLabel[statusMsg]?.[lang] ?? (lang === 'ar' ? 'جارٍ التحميل…' : 'Loading…'))
-                  : (lang === 'ar' ? 'جارٍ التحميل…' : 'Loading…')}
+                {statusLabel[statusMsg]?.[lang] ?? (lang === 'ar' ? 'جارٍ التحميل…' : 'Loading…')}
               </p>
+            </div>
+          </div>
+        )}
+        {/* Rebuffer spinner — small badge in corner, no dark overlay so video stays visible */}
+        {buffering && !statusMsg && !error && (
+          <div className="absolute bottom-14 end-3 z-20 pointer-events-none">
+            <div className="flex items-center gap-1.5 bg-black/50 backdrop-blur-sm rounded-full px-2.5 py-1">
+              <Loader2 className="w-3.5 h-3.5 text-white/80 animate-spin" />
+              <span className="text-white/70 text-xs">{lang === 'ar' ? 'تحميل…' : 'Buffering…'}</span>
             </div>
           </div>
         )}
