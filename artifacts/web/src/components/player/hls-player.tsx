@@ -16,6 +16,7 @@ import FullscreenChat from './fullscreen-chat';
 import SubtitleSearch from './subtitle-search';
 import { type ChatMessage } from './smart-player';
 import { setRelaySocket, createRelayLoader } from '@/lib/relay-loader';
+import { createP2PLoader, hasPeerChannel } from '@/lib/p2p-loader';
 
 // ── SRT / VTT parser ─────────────────────────────────────────────────────────
 interface SubtitleCue { start: number; end: number; text: string }
@@ -631,7 +632,7 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
           // Full reset: remove crossorigin, clear src, then reload — critical on iOS Safari
           // after HLS.js was previously attached to the same video element
           video.removeAttribute('crossorigin');
-          video.setAttribute('referrerpolicy', 'no-referrer'); // Don't leak app domain as Referer to CDN
+          video.removeAttribute('referrerpolicy');
           video.removeAttribute('src');
           video.load();
           video.src = src;
@@ -649,8 +650,23 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
               else { setError('ip-locked'); setStatusMsg(null); }
             }
           };
-          video.addEventListener('loadedmetadata', onMeta, { once: true });
-          video.addEventListener('error',          onErr,  { once: true });
+          // Timeout: if native video doesn't load in 8 s move to next stage
+          // (iOS Safari often silently hangs on 403/CORS without firing an error event)
+          let nativeDone = false;
+          const onMetaWrapped = () => { if (nativeDone) return; nativeDone = true; clearTimeout(fallbackTimer); onMeta(); };
+          const onErrWrapped  = () => { if (nativeDone) return; nativeDone = true; clearTimeout(fallbackTimer); onErr(); };
+          const fallbackTimer = setTimeout(() => {
+            if (nativeDone) return;
+            nativeDone = true;
+            video.removeEventListener('loadedmetadata', onMetaWrapped);
+            video.removeEventListener('error', onErrWrapped);
+            if (!cancelled) {
+              if (onFail) { onFail(); }
+              else { setError('ip-locked'); setStatusMsg(null); }
+            }
+          }, 8_000);
+          video.addEventListener('loadedmetadata', onMetaWrapped, { once: true });
+          video.addEventListener('error',          onErrWrapped,  { once: true });
         };
 
         // S-Relay — socket relay via room host browser (last resort for IP-locked streams)
@@ -683,13 +699,43 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
           hls.attachMedia(video);
         };
 
+        // S-P2P — WebRTC DataChannel relay via host's browser (peer-to-peer, no server hop)
+        const sP2P = () => {
+          if (cancelled) return;
+          if (!hasPeerChannel()) { sRelay(); return; }
+          const P2PLoader = createP2PLoader();
+          setStatusMsg('hls-proxy');
+          const p2pCfg = { ...HLS_CONFIG, loader: P2PLoader as unknown as Hls['config']['loader'] };
+          const hls = new Hls(p2pCfg as Hls['config']);
+          hls.on(Hls.Events.ERROR, (_, d) => {
+            if (cancelled || !d.fatal) return;
+            hls.destroy();
+            sRelay();
+          });
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            if (cancelled) return;
+            const d = video.duration;
+            if (!isNaN(d)) {
+              const live = !d || !isFinite(d) || d === Infinity;
+              isLiveRef.current = live; setIsLive(live);
+              onIsLiveRef.current?.(live);
+            }
+            setStatusMsg(null); setError(null);
+            setSubtitleTracks(hls.subtitleTracks.map((tk, i) => ({ id: i, name: tk.name || tk.lang || `Track ${i + 1}`, lang: tk.lang })));
+            startStallWatchdog();
+          });
+          hlsRef.current = hls;
+          hls.loadSource(src);
+          hls.attachMedia(video);
+        };
+
         // S5 — API server manifest proxy (server-side fetch bypasses CORS; segments routed via /api/proxy/segment)
         const s5_apiProxy = () => {
           if (cancelled) return;
           setStatusMsg('hls-proxy');
           const proxyUrl = `/api/proxy/manifest?url=${encodeURIComponent(src)}`;
-          // On failure → try socket relay (host's browser has correct IP) → fallback to native
-          const hls = makeHls(() => sRelay());
+          // On failure → try P2P relay (host's browser over WebRTC DataChannel) → then socket relay
+          const hls = makeHls(() => sP2P());
           hlsRef.current = hls;
           hls.loadSource(proxyUrl);
           hls.attachMedia(video);
