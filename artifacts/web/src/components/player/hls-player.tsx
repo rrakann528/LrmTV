@@ -632,10 +632,12 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
           if (cancelled) return;
           destroyAll();
           setStatusMsg('native');
-          // Full reset: remove crossorigin, clear src, then reload — critical on iOS Safari
-          // after HLS.js was previously attached to the same video element
+          // Full reset — critical on iOS Safari after HLS.js was previously attached.
+          // Set referrerpolicy="no-referrer" so Safari does NOT send Referer: lrmtv.sbs
+          // to the CDN (many CDNs reject requests with an unknown Referer header).
           video.removeAttribute('crossorigin');
-          video.removeAttribute('referrerpolicy');
+          (video as HTMLVideoElement).crossOrigin = null as unknown as string;
+          video.setAttribute('referrerpolicy', 'no-referrer');
           video.removeAttribute('src');
           video.load();
           video.src = src;
