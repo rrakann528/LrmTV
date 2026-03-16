@@ -611,8 +611,9 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
       const loadViaHls = () => {
         if (cancelled) return;
 
-        // S2 — native <video> (no CORS, no crossorigin — last resort for IP-locked streams)
-        const s2_native = () => {
+        // S2 — native <video> (no CORS, no crossorigin — preserves user's IP for IP-locked streams)
+        // onFail: optional next step; if omitted shows ip-locked error (true last resort)
+        const s2_native = (onFail?: () => void) => {
           if (cancelled) return;
           destroyAll();
           setStatusMsg('native');
@@ -632,8 +633,10 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
             }
           };
           const onErr = () => {
-            // S2 is the last resort — show ip-locked error if even native fails
-            if (!cancelled) { setError('ip-locked'); setStatusMsg(null); }
+            if (!cancelled) {
+              if (onFail) { onFail(); }
+              else { setError('ip-locked'); setStatusMsg(null); }
+            }
           };
           video.addEventListener('loadedmetadata', onMeta, { once: true });
           video.addEventListener('error',          onErr,  { once: true });
@@ -682,18 +685,22 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
         }
 
         // S1 — HLS.js direct (best features: adaptive bitrate, quality switching)
-        // On CORS failure: jump straight to S5 (server-side proxy) if no CF Worker configured,
-        // or S3 (CF manifest proxy) if CF Worker is available.
+        // On CORS failure:
+        //   Safari (native HLS): S2 native first (preserves user IP for IP-locked streams) → S5 proxy fallback
+        //   Chrome/Firefox: S5 proxy directly (native can't play HLS on these browsers)
         setStatusMsg('hls-direct');
         if (Hls.isSupported()) {
-          const onS1Fail = () => CF_PROXY ? s3_cfManifestProxy() : s5_apiProxy();
+          const canNativeHls = video.canPlayType('application/vnd.apple.mpegurl') !== '';
+          const onS1Fail = canNativeHls
+            ? () => s2_native(() => CF_PROXY ? s3_cfManifestProxy() : s5_apiProxy())
+            : () => CF_PROXY ? s3_cfManifestProxy() : s5_apiProxy();
           const hls = makeHls(onS1Fail);
           hlsRef.current = hls;
           hls.loadSource(src);
           hls.attachMedia(video);
         } else if (video.canPlayType('application/vnd.apple.mpegurl') !== '') {
-          // Safari (iOS/macOS) without MSE: native HLS only
-          s2_native();
+          // Safari (iOS/macOS) without MSE: native HLS only → proxy as fallback
+          s2_native(() => CF_PROXY ? s3_cfManifestProxy() : s5_apiProxy());
         } else {
           setStatusMsg(null); setError('unsupported');
         }
