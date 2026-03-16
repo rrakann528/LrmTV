@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
-import { db, usersTable } from "@workspace/db";
+import { db, usersTable, loginAttemptsTable } from "@workspace/db";
 import { requireAuth, signToken, type AuthRequest } from "../middlewares/auth";
 import { z } from "zod";
 
@@ -27,6 +27,8 @@ function userPublic(u: typeof usersTable.$inferSelect) {
     email: u.email,
     emailVerified: u.emailVerified,
     provider: u.provider,
+    isSiteAdmin: u.isSiteAdmin,
+    isBanned: u.isBanned,
   };
 }
 
@@ -107,14 +109,30 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     user = byUsername;
   }
 
-  if (!user) { res.status(401).json({ error: "اسم المستخدم أو كلمة المرور غير صحيحة" }); return; }
+  const clientIp = (req as any).ip || "";
+  if (!user) {
+    await db.insert(loginAttemptsTable).values({ identifier: email || username || "", ip: clientIp, success: false }).catch(() => {});
+    res.status(401).json({ error: "اسم المستخدم أو كلمة المرور غير صحيحة" }); return;
+  }
   if (!user.passwordHash) {
     res.status(401).json({ error: "هذا الحساب مرتبط بـ Google، سجّل دخولك بـ Google" });
     return;
   }
 
   const valid = await bcrypt.compare(password, user.passwordHash);
-  if (!valid) { res.status(401).json({ error: "اسم المستخدم أو كلمة المرور غير صحيحة" }); return; }
+  if (!valid) {
+    await db.insert(loginAttemptsTable).values({ identifier: user.username, ip: clientIp, success: false }).catch(() => {});
+    res.status(401).json({ error: "اسم المستخدم أو كلمة المرور غير صحيحة" }); return;
+  }
+
+  if (user.isBanned) { res.status(403).json({ error: "تم حظر هذا الحساب. تواصل مع الإدارة." }); return; }
+
+  // Auto-grant site admin if email matches ADMIN_EMAIL env var
+  const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase().trim();
+  if (adminEmail && user.email?.toLowerCase() === adminEmail && !user.isSiteAdmin) {
+    await db.update(usersTable).set({ isSiteAdmin: true }).where(eq(usersTable.id, user.id));
+    user = { ...user, isSiteAdmin: true };
+  }
 
   const token = signToken(user.id, user.username);
   res.cookie("token", token, COOKIE_OPTS);
