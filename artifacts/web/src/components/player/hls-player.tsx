@@ -611,18 +611,47 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
       const loadViaHls = () => {
         if (cancelled) return;
 
-        // S5 — API server manifest proxy (last resort — handles HTTP streams & bypasses mixed content)
+        // S2 — native <video> (no CORS, no crossorigin — last resort for IP-locked streams)
+        const s2_native = () => {
+          if (cancelled) return;
+          destroyAll();
+          setStatusMsg('native');
+          // Full reset: remove crossorigin, clear src, then reload — critical on iOS Safari
+          // after HLS.js was previously attached to the same video element
+          video.removeAttribute('crossorigin');
+          video.setAttribute('referrerpolicy', 'no-referrer'); // Don't leak app domain as Referer to CDN
+          video.removeAttribute('src');
+          video.load();
+          video.src = src;
+          video.load();
+          const onMeta = () => {
+            if (!cancelled) {
+              const live = !isFinite(video.duration) || video.duration === Infinity;
+              isLiveRef.current = live; setIsLive(live);
+              onDurationChange(); setStatusMsg(null); setError(null); startStallWatchdog(); signalReady();
+            }
+          };
+          const onErr = () => {
+            // S2 is the last resort — show ip-locked error if even native fails
+            if (!cancelled) { setError('ip-locked'); setStatusMsg(null); }
+          };
+          video.addEventListener('loadedmetadata', onMeta, { once: true });
+          video.addEventListener('error',          onErr,  { once: true });
+        };
+
+        // S5 — API server manifest proxy (server-side fetch bypasses CORS; segments routed via /api/proxy/segment)
         const s5_apiProxy = () => {
           if (cancelled) return;
           setStatusMsg('hls-proxy');
           const proxyUrl = `/api/proxy/manifest?url=${encodeURIComponent(src)}`;
-          const hls = makeHls(() => { setError('ip-locked'); setStatusMsg(null); });
+          // On failure fall through to S2 (native video — last resort for IP-locked streams)
+          const hls = makeHls(() => s2_native());
           hlsRef.current = hls;
           hls.loadSource(proxyUrl);
           hls.attachMedia(video);
         };
 
-        // S4 — full proxy via CF Worker (all segments through CF)
+        // S4 — full proxy via CF Worker (all segments through CF, only when CF_PROXY is set)
         const s4_cfFullProxy = () => {
           if (cancelled) return;
           const cfUrl = buildCfUrl(src);
@@ -646,33 +675,6 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
           hls.attachMedia(video);
         };
 
-        // S2 — native <video> (no CORS, no crossorigin — bypasses CORS & works for IP-locked streams on Safari)
-        const s2_native = () => {
-          if (cancelled) return;
-          destroyAll();
-          setStatusMsg('native');
-          // Full reset: remove crossorigin, clear src, then reload — critical on iOS Safari
-          // after HLS.js was previously attached to the same video element
-          video.removeAttribute('crossorigin');
-          video.setAttribute('referrerpolicy', 'no-referrer'); // Don't leak app domain as Referer to CDN
-          video.removeAttribute('src');
-          video.load();
-          video.src = src;
-          video.load();
-          const onMeta = () => {
-            if (!cancelled) {
-              const live = !isFinite(video.duration) || video.duration === Infinity;
-              isLiveRef.current = live; setIsLive(live);
-              onDurationChange(); setStatusMsg(null); setError(null); startStallWatchdog(); signalReady();
-            }
-          };
-          const onErr = () => {
-            if (!cancelled) s3_cfManifestProxy();
-          };
-          video.addEventListener('loadedmetadata', onMeta, { once: true });
-          video.addEventListener('error',          onErr,  { once: true });
-        };
-
         // HTTP src on HTTPS page → browser blocks it as mixed content → skip straight to API proxy
         if (src.startsWith('http:') && window.location.protocol === 'https:') {
           s5_apiProxy();
@@ -680,9 +682,12 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
         }
 
         // S1 — HLS.js direct (best features: adaptive bitrate, quality switching)
+        // On CORS failure: jump straight to S5 (server-side proxy) if no CF Worker configured,
+        // or S3 (CF manifest proxy) if CF Worker is available.
         setStatusMsg('hls-direct');
         if (Hls.isSupported()) {
-          const hls = makeHls(() => s2_native());
+          const onS1Fail = () => CF_PROXY ? s3_cfManifestProxy() : s5_apiProxy();
+          const hls = makeHls(onS1Fail);
           hlsRef.current = hls;
           hls.loadSource(src);
           hls.attachMedia(video);
