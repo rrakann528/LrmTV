@@ -6,6 +6,7 @@ import React, {
   useEffect,
   useCallback,
 } from 'react';
+import type { Socket } from 'socket.io-client';
 import ReactPlayer from 'react-player';
 import { motion, AnimatePresence } from 'framer-motion';
 import { normalizeUrl, detectVideoType } from '@/lib/detect-video-type';
@@ -69,6 +70,8 @@ interface SmartPlayerProps {
   isLiveHint?: boolean;
   /** Fired when HLS manifest is parsed and live/VOD status is known */
   onIsLive?: (isLive: boolean) => void;
+  /** Socket.io socket — passed to HlsPlayer to enable relay fallback */
+  socket?: Socket | null;
 }
 
 export const SmartPlayer = forwardRef<SmartPlayerHandle, SmartPlayerProps>(
@@ -92,6 +95,7 @@ export const SmartPlayer = forwardRef<SmartPlayerHandle, SmartPlayerProps>(
       externalSubtitle,
       isLiveHint = false,
       onIsLive,
+      socket = null,
     },
     ref,
   ) => {
@@ -328,6 +332,7 @@ export const SmartPlayer = forwardRef<SmartPlayerHandle, SmartPlayerProps>(
             externalSubtitle={externalSubtitle}
             isLiveHint={isLiveHint}
             onIsLive={onIsLive}
+            socket={socket}
           />
         </div>
       );
