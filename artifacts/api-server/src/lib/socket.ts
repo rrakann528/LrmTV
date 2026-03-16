@@ -770,11 +770,14 @@ export function initSocketServer(httpServer: HttpServer): Server {
 
       const host = Array.from(roomState.users.values()).find(u => u.isDJ || u.isAdmin);
       if (!host) {
+        console.log(`[relay] no host in room ${currentRoomSlug} → 503`);
         socket.emit("relay:error", { requestId: data.requestId, status: 503 });
         return;
       }
 
       const djIp = host.ip || '';
+      const urlShort = data.url.split('?')[0].split('/').slice(-2).join('/');
+      console.log(`[relay] room=${currentRoomSlug} djIp=${djIp || 'none'} url=...${urlShort}`);
 
       const headers: Record<string, string> = { ...RELAY_BASE_HEADERS };
       if (djIp) {
@@ -797,17 +800,19 @@ export function initSocketServer(httpServer: HttpServer): Server {
             signal: AbortSignal.timeout(15_000),
           });
 
+          console.log(`[relay] status=${response.status} referer="${referer || 'none'}" url=...${urlShort}`);
           if (!response.ok) { lastStatus = response.status; continue; }
 
           const contentType = response.headers.get('content-type') || 'video/mp2t';
           const buffer = Buffer.from(await response.arrayBuffer());
           socket.emit("relay:response", { requestId: data.requestId, data: buffer, contentType });
           return;
-        } catch {
-          // try next referer
+        } catch (err: any) {
+          console.log(`[relay] fetch error: ${err?.message} url=...${urlShort}`);
         }
       }
 
+      console.log(`[relay] all attempts failed, lastStatus=${lastStatus}`);
       socket.emit("relay:error", { requestId: data.requestId, status: lastStatus });
     });
 
