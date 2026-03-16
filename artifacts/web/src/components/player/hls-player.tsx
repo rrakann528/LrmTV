@@ -747,16 +747,23 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
 
         // S1 — HLS.js direct (best features: adaptive bitrate, quality switching)
         // On CORS/IP failure:
-        //   Socket connected → skip S2-S5 and go straight to relay (saves 15-30s for IP-locked streams)
-        //   No socket:
-        //     Safari (native HLS): S2 native first → S5 proxy fallback
-        //     Chrome/Firefox: S5 proxy directly (native can't play HLS on these browsers)
+        //   Socket connected + iOS/Safari: S2 native (DJ uses own IP, no CORS) → sRelay
+        //   Socket connected + Chrome/Firefox: sRelay directly (no native HLS on these browsers)
+        //   No socket (Safari): S2 native → S5 proxy fallback
+        //   No socket (Chrome): S5 proxy directly
         const canRelay = socket?.connected === true;
         setStatusMsg('hls-direct');
         if (Hls.isSupported()) {
           const canNativeHls = video.canPlayType('application/vnd.apple.mpegurl') !== '';
+          // When relay is available:
+          //   iOS/Safari (canNativeHls): try S2 native first (no CORS, preserves IP for DJ)
+          //     then relay for viewers whose IP is blocked
+          //   Chrome/Firefox: go straight to relay (no native HLS support)
+          // When no relay: original S2→S5 chain
           const onS1Fail = canRelay
-            ? () => sRelay()
+            ? canNativeHls
+              ? () => s2_native(() => sRelay())
+              : () => sRelay()
             : canNativeHls
               ? () => s2_native(() => CF_PROXY ? s3_cfManifestProxy() : s5_apiProxy())
               : () => CF_PROXY ? s3_cfManifestProxy() : s5_apiProxy();
@@ -766,7 +773,7 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
           hls.attachMedia(video);
         } else if (video.canPlayType('application/vnd.apple.mpegurl') !== '') {
           // Safari (iOS/macOS) without MSE: native HLS only
-          // If relay available skip proxy fallback, otherwise try proxy
+          // If relay available use it as fallback, otherwise try proxy
           s2_native(() => canRelay ? sRelay() : (CF_PROXY ? s3_cfManifestProxy() : s5_apiProxy()));
         } else {
           setStatusMsg(null); setError('unsupported');
