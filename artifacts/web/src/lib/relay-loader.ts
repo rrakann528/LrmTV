@@ -72,8 +72,17 @@ export function createRelayLoader() {
             cleanup();
             if (this._aborted) return;
             try {
+              // HLS.js expects a string for manifest/level/subtitle types, ArrayBuffer for fragments
+              const ctxType = (context.type as string) ?? '';
+              const isText = ctxType === 'manifest' || ctxType === 'level' ||
+                ctxType === 'audioTrack' || ctxType === 'subtitle' ||
+                (data.contentType ?? '').includes('mpegurl') ||
+                (data.contentType ?? '').includes('x-mpegurl');
+              const payload = isText
+                ? new TextDecoder('utf-8').decode(data.data)
+                : data.data;
               (callbacks.onSuccess as (res: unknown, stats: unknown, ctx: unknown, nd: null) => void)(
-                { url, data: data.data },
+                { url, data: payload },
                 stats,
                 ctx,
                 null,
