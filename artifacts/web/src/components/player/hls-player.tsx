@@ -876,13 +876,25 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
                   {t('videoErrorProxyBtn')}
                 </button>
               ) : (
-                <button
-                  onClick={handleRetry}
-                  className="mt-1 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 active:bg-white/25 text-white text-sm font-medium transition-colors border border-white/15"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                  {lang === 'ar' ? 'إعادة المحاولة' : 'Retry'}
-                </button>
+                <div className="flex flex-col items-center gap-2 mt-1">
+                  <button
+                    onClick={handleRetry}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 active:bg-white/25 text-white text-sm font-medium transition-colors border border-white/15"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    {lang === 'ar' ? 'إعادة المحاولة' : 'Retry'}
+                  </button>
+                  {error === 'ip-locked' && (
+                    <a
+                      href={src}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 text-sm font-medium transition-colors border border-white/20"
+                    >
+                      {lang === 'ar' ? 'افتح في تبويب جديد' : 'Open in new tab'}
+                    </a>
+                  )}
+                </div>
               )}
             </div>
           </div>
