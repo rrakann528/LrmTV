@@ -46,10 +46,10 @@ function ipBanMiddleware(req: Request, res: Response, next: NextFunction): void 
 }
 
 // ── Maintenance mode middleware ────────────────────────────────────────────────
+// NOTE: mounted on /api — so req.path is relative, e.g. /auth/google not /api/auth/google
 function maintenanceMiddleware(req: Request, res: Response, next: NextFunction): void {
   if (!_maintenanceMode) { next(); return; }
-  // Allow admin routes and health check
-  if (req.path.startsWith("/api/admin") || req.path === "/api/healthz" || req.path.startsWith("/api/auth")) {
+  if (req.path.startsWith("/admin") || req.path.startsWith("/auth")) {
     next(); return;
   }
   res.status(503).json({ error: "الموقع في وضع الصيانة. يرجى المحاولة لاحقاً." });
