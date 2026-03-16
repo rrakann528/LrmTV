@@ -13,6 +13,7 @@ const RoomPage    = lazy(() => import("@/pages/room"));
 const AuthPage    = lazy(() => import("@/pages/auth"));
 const TermsPage   = lazy(() => import("@/pages/terms"));
 const PrivacyPage = lazy(() => import("@/pages/privacy"));
+const AdminPage   = lazy(() => import("@/pages/admin"));
 const NotFound    = lazy(() => import("@/pages/not-found"));
 
 const queryClient = new QueryClient({
@@ -75,6 +76,7 @@ function Router() {
         <Route path="/room/:slug" component={RoomPage} />
         <Route path="/terms"      component={TermsPage} />
         <Route path="/privacy"    component={PrivacyPage} />
+        <Route path="/admin"      component={AdminPage} />
         <Route component={NotFound} />
       </Switch>
     </Suspense>
