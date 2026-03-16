@@ -7,6 +7,8 @@ import { signToken } from "../middlewares/auth";
 const router = Router();
 
 function getPublicOrigin(req: any): string {
+  // BASE_URL env var takes priority (set this on Railway to https://lrmtv.sbs)
+  if (process.env.BASE_URL) return process.env.BASE_URL.replace(/\/$/, "");
   const replitDomain = process.env.REPLIT_DEV_DOMAIN;
   if (replitDomain) return `https://${replitDomain}`;
   const proto = req.get("x-forwarded-proto") || req.protocol || "https";
@@ -182,11 +184,20 @@ router.get("/auth/google/callback", async (req, res): Promise<void> => {
 
     if (!googleId) throw new Error("Could not get Google user ID");
 
-    const user = await findOrCreateOAuthUser("google", googleId, {
+    let user = await findOrCreateOAuthUser("google", googleId, {
       email: info.email,
       displayName: info.name,
       avatarUrl: info.picture,
     });
+
+    if (user.isBanned) { sendErrorPage(res, "account_banned", origin); return; }
+
+    // Auto-grant site admin if email matches ADMIN_EMAIL env var
+    const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase().trim();
+    if (adminEmail && user.email?.toLowerCase() === adminEmail && !user.isSiteAdmin) {
+      const [updated] = await db.update(usersTable).set({ isSiteAdmin: true }).where(eq(usersTable.id, user.id)).returning();
+      user = updated;
+    }
 
     const token = signToken(user.id, user.username);
     console.log("[OAuth] Success. userId:", user.id, "redirecting to:", `${origin}/home`);
