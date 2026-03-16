@@ -876,6 +876,19 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
       }
     }, [playing]);
 
+    // Loading timeout — fires once per src/retryKey; if video never plays within 45 s → show error
+    useEffect(() => {
+      if (!src) return;
+      const timer = setTimeout(() => {
+        // Only show error if still loading (statusMsg truthy) and no error yet
+        setStatusMsg(prev => {
+          if (prev) { setError(e => e ?? 'ip-locked'); return null; }
+          return prev;
+        });
+      }, 45_000);
+      return () => clearTimeout(timer);
+    }, [src, retryKey]);
+
     // Fullscreen tracking (native + webkit + simulated)
     useEffect(() => {
       const el = containerRef.current;
