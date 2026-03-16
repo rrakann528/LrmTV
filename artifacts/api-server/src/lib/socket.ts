@@ -696,7 +696,44 @@ export function initSocketServer(httpServer: HttpServer): Server {
       });
     });
 
-    // ── Subtitle sync ─────────────────────────────────────────────────────────
+    // ── Relay: route segment/manifest fetch requests through the room host ───────
+    // pendingRelays maps requestId → requester's socketId for response routing
+    const pendingRelays = new Map<string, string>();
+
+    socket.on("relay:fetch", (data: { requestId: string; url: string }) => {
+      if (!currentRoomSlug || !data?.requestId || !data?.url) return;
+      const roomState = getRoomState(currentRoomSlug);
+      if (!roomState) return;
+
+      const host = Array.from(roomState.users.values()).find(u => u.isDJ || u.isAdmin);
+      if (!host || host.socketId === socket.id) {
+        socket.emit("relay:error", { requestId: data.requestId, status: 503 });
+        return;
+      }
+
+      pendingRelays.set(data.requestId, socket.id);
+      // Auto-cleanup after 20 s to prevent memory leaks
+      setTimeout(() => pendingRelays.delete(data.requestId), 20_000);
+
+      io.to(host.socketId).emit("relay:fetch", { requestId: data.requestId, url: data.url });
+    });
+
+    socket.on("relay:response", (data: { requestId: string; data: Buffer; contentType: string }) => {
+      if (!data?.requestId) return;
+      const requesterSocketId = pendingRelays.get(data.requestId);
+      if (!requesterSocketId) return;
+      pendingRelays.delete(data.requestId);
+      io.to(requesterSocketId).emit("relay:response", data);
+    });
+
+    socket.on("relay:error", (data: { requestId: string; status: number }) => {
+      if (!data?.requestId) return;
+      const requesterSocketId = pendingRelays.get(data.requestId);
+      if (!requesterSocketId) return;
+      pendingRelays.delete(data.requestId);
+      io.to(requesterSocketId).emit("relay:error", data);
+    });
+
     socket.on("subtitle-sync", (data: SubtitleSync) => {
       if (!currentRoomSlug) return;
       const roomState = getRoomState(currentRoomSlug);
