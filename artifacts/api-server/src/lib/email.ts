@@ -4,16 +4,21 @@ const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || "smtp.hostinger.com",
   port: Number(process.env.SMTP_PORT) || 465,
   secure: true,
+  connectionTimeout: 8000,
+  greetingTimeout: 8000,
+  socketTimeout: 10000,
   auth: {
     user: process.env.SMTP_USER || "support@lrmtv.sbs",
     pass: process.env.SMTP_PASSWORD || "",
   },
 });
 
+const EMAIL_TIMEOUT_MS = 12000;
+
 export async function sendOtpEmail(to: string, code: string): Promise<void> {
   const from = process.env.SMTP_FROM || "LrmTV <support@lrmtv.sbs>";
 
-  await transporter.sendMail({
+  const send = transporter.sendMail({
     from,
     to,
     subject: `${code} — رمز التحقق من LrmTV`,
@@ -47,4 +52,10 @@ export async function sendOtpEmail(to: string, code: string): Promise<void> {
 </html>`,
     text: `رمز التحقق الخاص بك في LrmTV هو: ${code}\n\nهذا الرمز صالح لمدة 10 دقائق.`,
   });
+
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("SMTP timeout")), EMAIL_TIMEOUT_MS)
+  );
+
+  await Promise.race([send, timeout]);
 }

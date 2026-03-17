@@ -186,7 +186,10 @@ router.post("/auth/send-otp", requireAuth, async (req: AuthRequest, res): Promis
       [user.email, code]
     );
 
-    await sendOtpEmail(user.email, code);
+    // Fire-and-forget — don't block the response on SMTP
+    sendOtpEmail(user.email, code).catch((err: any) =>
+      console.error("[send-otp] SMTP error:", err?.message || err)
+    );
     res.json({ ok: true });
   } catch (err: any) {
     console.error("[send-otp]", err?.message || err);
