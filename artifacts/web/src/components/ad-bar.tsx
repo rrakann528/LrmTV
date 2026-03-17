@@ -4,27 +4,30 @@ declare global {
   interface Window { aclib?: any; }
 }
 
-const ZONE_ID = 'tf80ahdgu8';
+const BANNER_ZONE_ID = '11081914';
 
 export default function AdBar({ bottom = 0 }: { bottom?: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const loaded = useRef(false);
 
   useEffect(() => {
-    if (loaded.current) return;
-    const load = () => {
-      if (!window.aclib) return false;
-      try {
-        window.aclib.runBanner({ zoneId: ZONE_ID, containerId: 'lrmtv-ad-bar' });
-        loaded.current = true;
-      } catch {
-        window.aclib.runAutoTag({ zoneId: ZONE_ID });
-        loaded.current = true;
-      }
-      return true;
+    if (loaded.current || !ref.current) return;
+    loaded.current = true;
+
+    const inject = () => {
+      if (!ref.current) return;
+      const script = document.createElement('script');
+      script.type = 'text/javascript';
+      script.text = `aclib.runBanner({ zoneId: '${BANNER_ZONE_ID}' });`;
+      ref.current.appendChild(script);
     };
-    if (!load()) {
-      const t = setInterval(() => { if (load()) clearInterval(t); }, 500);
+
+    if (window.aclib) {
+      inject();
+    } else {
+      const t = setInterval(() => {
+        if (window.aclib) { clearInterval(t); inject(); }
+      }, 300);
       return () => clearInterval(t);
     }
   }, []);
@@ -46,7 +49,7 @@ export default function AdBar({ bottom = 0 }: { bottom?: number }) {
         overflow: 'hidden',
       }}
     >
-      <div ref={ref} id="lrmtv-ad-bar" style={{ width: '100%', maxWidth: 480, minHeight: 50 }} />
+      <div ref={ref} style={{ width: 300, minHeight: 50 }} />
     </div>
   );
 }
