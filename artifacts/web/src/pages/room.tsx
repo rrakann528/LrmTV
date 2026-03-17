@@ -75,9 +75,13 @@ export default function RoomPage() {
   const [copied, setCopied]     = useState(false);
   const [isSeeking]             = useState(false);
   const [playerReady, setPlayerReady] = useState(false);
-  // "Click to Watch" gate — prevents auto-play buffering lag on join.
-  // Set to true only when the user explicitly clicks to start watching.
-  const [watcherReady, setWatcherReady] = useState(false);
+  // "Click to Watch" gate — non-DJs must click before the player activates.
+  // DJs are always ready (computed: isDJ || watcherReadyState) so they
+  // never see the overlay, even during the first render before room-state arrives.
+  const [watcherReadyState, setWatcherReadyState] = useState(false);
+  // Suppress pause emissions when DJ is hiding/closing — prevents false
+  // pause events from resetting all viewers' playback position.
+  const suppressPauseRef = useRef(false);
 
   // Room settings panel (admin only) — controlled from header button
   const [showRoomSettings, setShowRoomSettings] = useState(false);
@@ -97,20 +101,34 @@ export default function RoomPage() {
   const isAdmin    = you?.isAdmin || false;
   const isGuest    = !you?.userId;
   const canControl = isDJ || allowGuestControl;
+  // DJs are always ready — no overlay needed. Non-DJs must click to watch.
+  // Computed directly so there's zero render-cycle lag (no useEffect needed).
+  const watcherReady = isDJ || watcherReadyState;
 
-  // Tell the server when the DJ hides/closes the PWA so it can swallow
-  // the browser-auto-pause and keep the room playing for other viewers.
+  // Tell the server when the DJ hides/closes so it can keep the room playing.
+  // Also sets suppressPauseRef so the browser's auto-pause is NOT forwarded
+  // to the server — eliminates the #1 cause of all-clients-seeking-to-0 on leave.
   useEffect(() => {
     if (!isDJ || !socket) return;
-    const notify = () => {
-      if (document.hidden) socket.emit('dj-backgrounding');
+    const onHide = () => {
+      socket.emit('dj-backgrounding');
+      suppressPauseRef.current = true;
     };
-    const notifyUnload = () => socket.emit('dj-backgrounding');
-    document.addEventListener('visibilitychange', notify);
-    window.addEventListener('pagehide', notifyUnload);
+    const onShow = () => {
+      suppressPauseRef.current = false;
+      // Resume local playback if the server still says we're playing.
+      // The browser may have auto-paused the video when the tab was hidden
+      // (common on mobile/PWA) — but the room state on the server stayed "playing".
+      if (syncPlayingRef.current) {
+        setTimeout(() => playerRef.current?.play(), 150);
+      }
+    };
+    const onVisibility = () => { document.hidden ? onHide() : onShow(); };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', onHide);
     return () => {
-      document.removeEventListener('visibilitychange', notify);
-      window.removeEventListener('pagehide', notifyUnload);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', onHide);
     };
   }, [isDJ, socket]);
 
@@ -155,33 +173,26 @@ export default function RoomPage() {
   // Timestamp of when the player last became ready — used to enforce a grace period
   // so the sync effect doesn't issue a seek immediately after the initial buffer load.
   const readyTimeRef = useRef<number>(0);
+  // Ref mirror of syncState.playing so closures (event handlers) always see the latest value.
+  const syncPlayingRef = useRef(syncState.playing);
+  useEffect(() => { syncPlayingRef.current = syncState.playing; }, [syncState.playing]);
 
-  // Reset playerReady and watcherReady whenever the video URL changes
+  // Reset player state whenever the video URL changes.
+  // watcherReadyState is reset (non-DJs must click again); isDJ guard in watcherReady
+  // computed value ensures DJs never see the overlay regardless.
   useEffect(() => {
     setPlayerReady(false);
     readyTimeRef.current = 0;
-    setWatcherReady(false);
+    setWatcherReadyState(false);
   }, [syncState.url]);
 
-  // DJs/admins are always "ready" — no overlay needed for the room host
-  useEffect(() => {
-    if (isDJ) setWatcherReady(true);
-  }, [isDJ]);
-
-  // Sync effect — thresholds differ by source to avoid buffering-on-join stuttering.
-  // heartbeat: correct only if >8s off (gentle drift correction)
-  // action:    correct if >1.5s off (play/pause/seek from a peer)
-  // initial:   threshold=Infinity — signalReady() inside HlsPlayer handles the initial
-  //            seek via startPosition + canplay; the sync effect must not interfere.
-  //            After the 10-second grace period, fall back to heartbeat-level threshold.
-  // live:      NEVER seek by time — everyone joins at the live edge naturally.
-  //            Only play/pause state is synced; HLS.js keeps all viewers at live edge.
+  // Sync effect — thresholds by source:
+  //   action:    1.5 s  — explicit play/pause/seek from a peer
+  //   heartbeat: 8 s    — gentle drift correction, only if video is playing (not buffering)
+  //   initial:   ∞ until 30 s grace, then falls back to 8 s
+  // live:  skip ALL time seeks — HLS.js auto-tracks the live edge
   useEffect(() => {
     if (!playerRef.current || isSeeking || !playerReady) return;
-
-    // For live streams, skip ALL time-based seeks.
-    // The live edge is maintained automatically by HLS.js's liveSyncDurationCount setting.
-    // Seeking to a specific computedTime in a live sliding window causes buffer stalls.
     if (syncState.isLive) return;
 
     const playerTime = playerRef.current.getCurrentTime() || 0;
@@ -190,10 +201,17 @@ export default function RoomPage() {
 
     const threshold = syncState.source === 'action'    ? 1.5
                     : syncState.source === 'heartbeat' ? 8
-                    : sinceReady > 10_000              ? 8
-                    : Infinity; // initial within grace period — do not seek
+                    : sinceReady > 30_000              ? 8   // 30 s grace (was 10 s)
+                    : Infinity;
 
     if (diff > threshold) {
+      // For heartbeat-only corrections, skip if the video is still buffering.
+      // Seeking while buffering restarts the buffer load from a new position,
+      // causing the DJ-returns-and-freezes loop.
+      if (syncState.source === 'heartbeat') {
+        const videoEl = playerRef.current.getVideoElement?.();
+        if (videoEl && videoEl.readyState < 3) return; // HAVE_FUTURE_DATA not reached yet
+      }
       isRemoteSeekRef.current = true;
       playerRef.current.seekTo(syncState.time, 'seconds');
       setTimeout(() => { isRemoteSeekRef.current = false; }, 1500);
@@ -288,11 +306,19 @@ export default function RoomPage() {
     if (cameraDisabled && cameraOn) { setCameraOn(false); toggleMedia({ isCameraOff: true }); }
   }, [cameraDisabled]);
 
-  const handlePlay  = () => { if (!canControl) return; emitSync(playerRef.current?.getCurrentTime() || syncState.time, true,  syncState.url); };
+  const handlePlay  = () => {
+    if (!canControl) return;
+    // DJ returned / resumed — allow future pause events again
+    suppressPauseRef.current = false;
+    emitSync(playerRef.current?.getCurrentTime() || syncState.time, true, syncState.url);
+  };
   // Use syncState.time as fallback so we never send currentTime=0 when the player
-  // ref is null (e.g. component unmounting during tab close) — prevents all clients
-  // from being seeked back to the beginning when admin leaves.
-  const handlePause = () => { if (!canControl) return; emitSync(playerRef.current?.getCurrentTime() || syncState.time, false, syncState.url); };
+  // ref is null (tab close) — also guarded by suppressPauseRef so the browser's
+  // auto-pause on tab-hide / pagehide is never forwarded to the server.
+  const handlePause = () => {
+    if (!canControl || suppressPauseRef.current) return;
+    emitSync(playerRef.current?.getCurrentTime() || syncState.time, false, syncState.url);
+  };
   const handleSeek  = (s: number) => { if (isRemoteSeekRef.current || !canControl) return; emitSeek(s); };
 
   const copyUrl = () => {
@@ -446,7 +472,7 @@ export default function RoomPage() {
                 {!watcherReady && syncState.url && (
                   <div
                     className="absolute inset-0 z-30 flex items-center justify-center bg-black/75 cursor-pointer select-none"
-                    onClick={() => { setWatcherReady(true); }}
+                    onClick={() => { setWatcherReadyState(true); }}
                   >
                     <div className="text-center space-y-4">
                       <div className="w-24 h-24 rounded-full bg-white/15 backdrop-blur-md flex items-center justify-center mx-auto border-2 border-white/30 hover:bg-white/25 transition-colors">
