@@ -1,36 +1,18 @@
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
-const smtpPort = Number(process.env.SMTP_PORT) || 587;
-
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || "smtp.hostinger.com",
-  port: smtpPort,
-  secure: smtpPort === 465,
-  connectionTimeout: 8000,
-  greetingTimeout: 8000,
-  socketTimeout: 10000,
-  auth: {
-    user: process.env.SMTP_USER || "support@lrmtv.sbs",
-    pass: process.env.SMTP_PASSWORD || "",
-  },
-});
-
-const EMAIL_TIMEOUT_MS = 12000;
+const resend = new Resend(process.env.RESEND_API_KEY || "");
+const FROM = process.env.SMTP_FROM || "LrmTV <support@lrmtv.sbs>";
 
 export async function verifySmtp(): Promise<{ ok: boolean; error?: string }> {
-  try {
-    await transporter.verify();
-    return { ok: true };
-  } catch (err: any) {
-    return { ok: false, error: err?.message || String(err) };
+  if (!process.env.RESEND_API_KEY) {
+    return { ok: false, error: "RESEND_API_KEY not set" };
   }
+  return { ok: true };
 }
 
 export async function sendOtpEmail(to: string, code: string): Promise<void> {
-  const from = process.env.SMTP_FROM || "LrmTV <support@lrmtv.sbs>";
-
-  const send = transporter.sendMail({
-    from,
+  const { error } = await resend.emails.send({
+    from: FROM,
     to,
     subject: `${code} — رمز التحقق من LrmTV`,
     html: `
@@ -64,9 +46,5 @@ export async function sendOtpEmail(to: string, code: string): Promise<void> {
     text: `رمز التحقق الخاص بك في LrmTV هو: ${code}\n\nهذا الرمز صالح لمدة 10 دقائق.`,
   });
 
-  const timeout = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error("SMTP timeout")), EMAIL_TIMEOUT_MS)
-  );
-
-  await Promise.race([send, timeout]);
+  if (error) throw new Error(error.message);
 }
