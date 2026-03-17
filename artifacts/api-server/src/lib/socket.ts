@@ -53,6 +53,8 @@ interface RoomState {
   lastPauseAt?: number;
   /** DJ signalled they are backgrounding/closing — ignore their next pause */
   djBackgrounding?: { socketId: string; at: number };
+  /** Cached frozen state — avoids a DB round-trip on every join */
+  isFrozen: boolean;
 }
 
 const EMPTY_ROOM_TTL_MS = 10 * 60 * 1000; // 10 minutes
@@ -195,6 +197,7 @@ function createRoomState(slug: string, roomId: number, roomName: string): RoomSt
     isLive: false,
     subtitle: null,
     allowGuestEntry: true,
+    isFrozen: false,
   };
   rooms.set(slug, state);
   return state;
@@ -260,6 +263,7 @@ export function initSocketServer(httpServer: HttpServer): Server {
         roomState = createRoomState(slug, room.id, room.name);
         roomState.background = room.background || "default";
         roomState.isPrivate = room.type === "private";
+        roomState.isFrozen = room.isFrozen || false;
         // Restore permanent admin from DB
         if (room.creatorUserId) roomState.creatorUserId = room.creatorUserId;
       }
@@ -267,9 +271,8 @@ export function initSocketServer(httpServer: HttpServer): Server {
       // Cancel pending auto-delete if someone is joining an empty room
       cancelRoomDeletion(roomState);
 
-      // Block if room is frozen (admin only)
-      const [dbRoomFrozen] = await db.select({ isFrozen: roomsTable.isFrozen }).from(roomsTable).where(eq(roomsTable.slug, slug)).limit(1);
-      if (dbRoomFrozen?.isFrozen) {
+      // Block if room is frozen — use cached state (updated by admin actions)
+      if (roomState.isFrozen) {
         socket.emit("room-frozen");
         return;
       }
@@ -333,6 +336,7 @@ export function initSocketServer(httpServer: HttpServer): Server {
         cameraDisabled: roomState.cameraDisabled,
         isLive: roomState.isLive,
         subtitle: roomState.subtitle,
+        serverTs: Date.now(),
       });
 
       const systemMsg = {
@@ -342,7 +346,8 @@ export function initSocketServer(httpServer: HttpServer): Server {
         roomId: roomState.roomId,
       };
 
-      await db.insert(chatMessagesTable).values(systemMsg);
+      // Fire-and-forget — don't block the socket response on a DB write
+      db.insert(chatMessagesTable).values(systemMsg).catch(() => {});
 
       io.to(slug).emit("user-joined", {
         user,
@@ -406,7 +411,9 @@ export function initSocketServer(httpServer: HttpServer): Server {
         currentTime: roomState.currentTime,
         url: roomState.currentVideo,
         isPlaying: roomState.isPlaying,
+        isLive: roomState.isLive,
         from: user.username,
+        serverTs: Date.now(),
       });
     });
 
@@ -732,7 +739,9 @@ export function initSocketServer(httpServer: HttpServer): Server {
         currentTime: computedTime(roomState),
         url: roomState.currentVideo,
         isPlaying: roomState.isPlaying,
+        isLive: roomState.isLive,
         from: "server",
+        serverTs: Date.now(),
       });
     });
 
@@ -766,7 +775,8 @@ export function initSocketServer(httpServer: HttpServer): Server {
           type: "system" as const,
           roomId: roomState.roomId,
         };
-        try { await db.insert(chatMessagesTable).values(systemMsg); } catch {}
+        // Fire-and-forget — emit immediately without waiting for DB
+        db.insert(chatMessagesTable).values(systemMsg).catch(() => {});
         io.to(currentRoomSlug).emit("user-left", {
           socketId: socket.id,
           username: user.username,
@@ -814,7 +824,9 @@ export function initSocketServer(httpServer: HttpServer): Server {
           currentTime: computedTime(roomState),
           url: roomState.currentVideo,
           isPlaying: true,
+          isLive: roomState.isLive,
           from: "server",
+          serverTs: Date.now(),
         });
       }
 
@@ -837,6 +849,7 @@ function startHeartbeat(io: Server, state: RoomState) {
       currentTime: computedTime(state),
       isPlaying: true,
       isLive: state.isLive,
+      serverTs: Date.now(),
     });
   }, 5000);
 }

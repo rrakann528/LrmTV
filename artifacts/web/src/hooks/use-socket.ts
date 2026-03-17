@@ -112,12 +112,14 @@ export function useSocket(slug: string | null) {
       users: RoomUser[];
       you: RoomUser;
       isLive?: boolean;
+      serverTs?: number;
     }) => {
       setUsers(state.users || []);
       setYou(state.you);
+      const latencyS = state.serverTs ? (Date.now() - state.serverTs) / 1000 : 0;
       setSyncState({
         playing: state.isPlaying,
-        time: state.currentTime,
+        time: state.currentTime + (state.isPlaying ? latencyS : 0),
         updatedAt: Date.now(),
         url: state.currentVideo,
         source: 'initial',
@@ -197,22 +199,27 @@ export function useSocket(slug: string | null) {
       currentTime: number;
       url: string | null;
       isPlaying: boolean;
+      isLive?: boolean;
       from: string;
+      serverTs?: number;
     }) => {
-      setSyncState({
+      const latencyS = data.serverTs ? (Date.now() - data.serverTs) / 1000 : 0;
+      setSyncState(prev => ({
         playing: data.isPlaying,
-        time: data.currentTime,
+        time: data.currentTime + (data.isPlaying ? latencyS : 0),
         updatedAt: Date.now(),
         url: data.url,
         source: 'action',
-      });
+        isLive: data.isLive ?? prev.isLive,
+      }));
     });
 
     // Periodic heartbeat — gentle drift correction only (big gaps, not small drifts)
-    socket.on('heartbeat', (data: { currentTime: number; isPlaying: boolean; isLive?: boolean }) => {
+    socket.on('heartbeat', (data: { currentTime: number; isPlaying: boolean; isLive?: boolean; serverTs?: number }) => {
+      const latencyS = data.serverTs ? (Date.now() - data.serverTs) / 1000 : 0;
       setSyncState(prev => ({
         ...prev,
-        time: data.currentTime,
+        time: data.currentTime + (data.isPlaying ? latencyS : 0),
         playing: data.isPlaying,
         isLive: data.isLive ?? prev.isLive,
         updatedAt: Date.now(),
