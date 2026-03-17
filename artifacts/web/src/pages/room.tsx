@@ -136,7 +136,7 @@ export default function RoomPage() {
       await addMutation.mutateAsync({ slug, data: { url, title: displayTitle, sourceType } });
       queryClient.invalidateQueries({ queryKey: getGetRoomPlaylistQueryKey(slug) });
       emitPlaylistUpdate('add');
-      if (!syncState.url) emitSync(0, true, url);
+      if (!syncState.url) emitSync(0, false, url);
     } catch { /* ignore */ }
   }, [slug, addMutation, queryClient, emitPlaylistUpdate, syncState.url, emitSync]);
 

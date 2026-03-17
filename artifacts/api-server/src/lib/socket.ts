@@ -555,10 +555,10 @@ export function initSocketServer(httpServer: HttpServer): Server {
         case "change-video":
           roomState.currentVideo = data.url || null;
           roomState.currentTime = 0;
-          roomState.isPlaying = true;
+          roomState.isPlaying = false;
           roomState.isLive = false; // reset — player will re-detect after manifest load
-          roomState.lastSyncTimestamp = Date.now();
-          startHeartbeat(io, roomState);
+          roomState.lastSyncTimestamp = 0;
+          stopHeartbeat(roomState);
           break;
       }
 
