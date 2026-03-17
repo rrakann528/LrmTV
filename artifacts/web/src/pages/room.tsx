@@ -202,13 +202,16 @@ export default function RoomPage() {
   useEffect(() => { syncPlayingRef.current = syncState.playing; }, [syncState.playing]);
 
   // Reset player state whenever the video URL changes.
-  // watcherReadyState is reset (non-DJs must click again); isDJ guard in watcherReady
-  // computed value ensures DJs never see the overlay regardless.
+  // Everyone (DJ + watcher) sees the pre-roll ad when a new video loads.
   useEffect(() => {
     setPlayerReady(false);
     readyTimeRef.current = 0;
     setWatcherReadyState(false);
-    setShowPreRoll(false);
+    if (syncState.url) {
+      setShowPreRoll(true); // show pre-roll for everyone
+    } else {
+      setShowPreRoll(false);
+    }
   }, [syncState.url]);
 
   // Sync effect — thresholds by source:
@@ -475,7 +478,7 @@ export default function RoomPage() {
                 <SmartPlayer
                   ref={playerRef}
                   url={syncState.url}
-                  playing={syncState.playing && watcherReady}
+                  playing={syncState.playing && watcherReady && !showPreRoll}
                   controls={canControl && watcherReady}
                   canControl={canControl && watcherReady}
                   initialTime={syncState.time}
@@ -505,7 +508,7 @@ export default function RoomPage() {
                   </div>
                 )}
 
-                {/* Pre-roll ad — shown once before the watcher gate opens */}
+                {/* Pre-roll ad — shown for everyone when a new video loads */}
                 {showPreRoll && (
                   <PreRollAd onDone={() => { setShowPreRoll(false); setWatcherReadyState(true); }} />
                 )}
