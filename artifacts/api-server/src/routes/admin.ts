@@ -10,7 +10,7 @@ import { eq, desc, count, asc, sql, and, lt } from "drizzle-orm";
 import { requireSiteAdmin, type AuthRequest } from "../middlewares/auth";
 import {
   broadcastSystemMessage, getActiveRoomsDetailed, getTotalActiveUsers, kickRoom, freezeRoom,
-  kickUserFromAllRooms, getUserActiveRooms, forceRoomVideoState,
+  kickUserFromAllRooms, getUserActiveRooms, forceRoomVideoState, sendRoomAnnouncement,
 } from "../lib/socket";
 
 const router = Router();
@@ -662,6 +662,181 @@ router.get("/admin/stats/enhanced", requireSiteAdmin, async (_req, res): Promise
     ]);
     res.json({ totalMessages, providers: providers.rows });
   } catch (err) { res.status(500).json({ error: "خطأ داخلي" }); }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FEATURE 1: رسم بياني إنشاء الغرف يومياً
+// ══════════════════════════════════════════════════════════════════════════════
+
+router.get("/admin/stats/rooms-daily", requireSiteAdmin, async (_req, res): Promise<void> => {
+  try {
+    const result = await db.execute(sql`
+      SELECT TO_CHAR(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day, COUNT(*)::int AS count
+      FROM rooms
+      WHERE created_at >= NOW() - INTERVAL '30 days'
+      GROUP BY day ORDER BY day ASC
+    `);
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: "خطأ داخلي" }); }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FEATURE 2: إيقاف جميع الغرف النشطة دفعة واحدة
+// ══════════════════════════════════════════════════════════════════════════════
+
+router.post("/admin/rooms/pause-all", requireSiteAdmin, async (_req, res): Promise<void> => {
+  const active = getActiveRoomsDetailed();
+  for (const r of active) { forceRoomVideoState(r.slug, 'pause'); }
+  res.json({ ok: true, paused: active.length });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FEATURE 3: حظر IP الأخير من بيانات المستخدم
+// ══════════════════════════════════════════════════════════════════════════════
+
+router.post("/admin/users/:id/ban-ip", requireSiteAdmin, async (req, res): Promise<void> => {
+  const targetId = parseInt(req.params.id, 10);
+  if (isNaN(targetId)) { res.status(400).json({ error: "معرف غير صالح" }); return; }
+  try {
+    const [user] = await db.select({ lastIp: usersTable.lastIp, username: usersTable.username })
+      .from(usersTable).where(eq(usersTable.id, targetId)).limit(1);
+    if (!user?.lastIp) { res.status(404).json({ error: "لا يوجد IP محفوظ لهذا المستخدم" }); return; }
+    await db.insert(bannedIpsTable).values({ ip: user.lastIp, reason: `حظر تلقائي: @${user.username}` })
+      .onConflictDoNothing();
+    res.json({ ok: true, ip: user.lastIp });
+  } catch (err) { res.status(500).json({ error: "خطأ داخلي" }); }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FEATURE 4: نقل ملكية الغرفة
+// ══════════════════════════════════════════════════════════════════════════════
+
+router.patch("/admin/rooms/:slug/transfer-owner", requireSiteAdmin, async (req, res): Promise<void> => {
+  const { slug } = req.params;
+  const { newOwnerUsername } = req.body;
+  if (!newOwnerUsername?.trim()) { res.status(400).json({ error: "اسم المستخدم مطلوب" }); return; }
+  try {
+    const [newOwner] = await db.select().from(usersTable).where(eq(usersTable.username, newOwnerUsername.trim())).limit(1);
+    if (!newOwner) { res.status(404).json({ error: "المستخدم غير موجود" }); return; }
+    await db.update(roomsTable).set({ creatorUserId: newOwner.id }).where(eq(roomsTable.slug, slug));
+    res.json({ ok: true, newOwnerId: newOwner.id, newOwnerUsername: newOwner.username });
+  } catch (err) { res.status(500).json({ error: "خطأ داخلي" }); }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FEATURE 5: تصدير محادثة الغرفة CSV
+// ══════════════════════════════════════════════════════════════════════════════
+
+router.get("/admin/rooms/:slug/chat/export", requireSiteAdmin, async (req, res): Promise<void> => {
+  const { slug } = req.params;
+  try {
+    const [room] = await db.select().from(roomsTable).where(eq(roomsTable.slug, slug)).limit(1);
+    if (!room) { res.status(404).json({ error: "الغرفة غير موجودة" }); return; }
+    const msgs = await db.select().from(chatMessagesTable)
+      .where(eq(chatMessagesTable.roomId, room.id))
+      .orderBy(asc(chatMessagesTable.createdAt));
+    const header = "ID,Username,Type,Content,CreatedAt\n";
+    const rows = msgs.map(m =>
+      [m.id, m.username, m.type, `"${m.content.replace(/"/g, '""')}"`, m.createdAt].join(',')
+    ).join('\n');
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="chat-${slug}-${new Date().toISOString().split('T')[0]}.csv"`);
+    res.send('\uFEFF' + header + rows);
+  } catch (err) { res.status(500).json({ error: "خطأ داخلي" }); }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FEATURE 6: عدد رسائل كل مستخدم
+// ══════════════════════════════════════════════════════════════════════════════
+
+router.get("/admin/users/message-counts", requireSiteAdmin, async (_req, res): Promise<void> => {
+  try {
+    const result = await db.execute(sql`
+      SELECT username, COUNT(*)::int AS msg_count
+      FROM chat_messages
+      WHERE type = 'message'
+      GROUP BY username
+      ORDER BY msg_count DESC
+    `);
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: "خطأ داخلي" }); }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FEATURE 7: حذف جميع غرف مستخدم
+// ══════════════════════════════════════════════════════════════════════════════
+
+router.delete("/admin/users/:id/rooms", requireSiteAdmin, async (req, res): Promise<void> => {
+  const targetId = parseInt(req.params.id, 10);
+  if (isNaN(targetId)) { res.status(400).json({ error: "معرف غير صالح" }); return; }
+  try {
+    const userRooms = await db.select({ slug: roomsTable.slug }).from(roomsTable).where(eq(roomsTable.creatorUserId, targetId));
+    for (const r of userRooms) { kickRoom(r.slug); }
+    const deleted = await db.delete(roomsTable).where(eq(roomsTable.creatorUserId, targetId)).returning({ slug: roomsTable.slug });
+    res.json({ ok: true, deleted: deleted.length });
+  } catch (err) { res.status(500).json({ error: "خطأ داخلي" }); }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FEATURE 8: بحث عالمي (مستخدمون + غرف)
+// ══════════════════════════════════════════════════════════════════════════════
+
+router.get("/admin/global-search", requireSiteAdmin, async (req, res): Promise<void> => {
+  const q = String(req.query.q ?? '').trim();
+  if (!q || q.length < 2) { res.json({ users: [], rooms: [] }); return; }
+  try {
+    const [users, rooms] = await Promise.all([
+      db.execute(sql`
+        SELECT id, username, display_name, email, is_banned, is_site_admin, created_at
+        FROM users
+        WHERE username ILIKE ${'%' + q + '%'} OR display_name ILIKE ${'%' + q + '%'} OR email ILIKE ${'%' + q + '%'}
+        LIMIT 10
+      `),
+      db.execute(sql`
+        SELECT id, slug, name, type, is_frozen, created_at
+        FROM rooms
+        WHERE name ILIKE ${'%' + q + '%'} OR slug ILIKE ${'%' + q + '%'}
+        LIMIT 10
+      `),
+    ]);
+    res.json({ users: users.rows, rooms: rooms.rows });
+  } catch (err) { res.status(500).json({ error: "خطأ داخلي" }); }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FEATURE 9: سجل نشاط الأدمن (بسيط - يخزن في site_settings)
+// ══════════════════════════════════════════════════════════════════════════════
+
+router.get("/admin/activity-log", requireSiteAdmin, async (_req, res): Promise<void> => {
+  try {
+    const val = await getSetting("admin_activity_log", "[]");
+    res.json(JSON.parse(val));
+  } catch { res.json([]); }
+});
+
+router.post("/admin/activity-log", requireSiteAdmin, async (req: AuthRequest, res): Promise<void> => {
+  const { action } = req.body;
+  if (!action) { res.status(400).json({ error: "action مطلوب" }); return; }
+  try {
+    const val = await getSetting("admin_activity_log", "[]");
+    const log: any[] = JSON.parse(val);
+    log.unshift({ action, by: req.user?.username ?? 'admin', at: new Date().toISOString() });
+    if (log.length > 100) log.splice(100);
+    await setSetting("admin_activity_log", JSON.stringify(log));
+    res.json({ ok: true });
+  } catch { res.status(500).json({ error: "خطأ داخلي" }); }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FEATURE 10: تثبيت/إلغاء تثبيت رسالة إعلان الغرفة
+// ══════════════════════════════════════════════════════════════════════════════
+
+router.post("/admin/rooms/:slug/announce", requireSiteAdmin, async (req, res): Promise<void> => {
+  const { slug } = req.params;
+  const { message } = req.body;
+  if (!message?.trim()) { res.status(400).json({ error: "الرسالة مطلوبة" }); return; }
+  sendRoomAnnouncement(slug, message.trim());
+  res.json({ ok: true });
 });
 
 export default router;

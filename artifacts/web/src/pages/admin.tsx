@@ -15,10 +15,15 @@ import { cn } from '@/lib/utils';
 type Tab = 'dashboard' | 'users' | 'rooms' | 'chat' | 'notifications' | 'settings' | 'security' | 'system';
 type UserFilter = 'all' | 'admin' | 'banned' | 'muted';
 type RoomFilter = 'all' | 'active' | 'frozen' | 'public' | 'private';
+type UserSort = 'date' | 'name' | 'id';
+type RoomSort = 'date' | 'name' | 'active';
 
 interface Stats { totalUsers: number; totalRooms: number; bannedUsers: number; totalBannedIps: number; activeRooms: number; activeUsers: number; }
 interface LiveStats { totalActiveUsers: number; totalActiveRooms: number; topRooms: { slug: string; userCount: number; isPlaying: boolean }[]; }
 interface EnhancedStats { totalMessages: number; providers: { provider: string; cnt: number }[]; }
+interface ActivityLogEntry { action: string; by: string; at: string; }
+interface MsgCount { username: string; msg_count: number; }
+interface GlobalSearchResult { users: any[]; rooms: any[]; }
 interface SystemInfo { node: string; uptime: number; memRss: number; memHeap: number; memHeapTotal: number; totalMessages: number; totalUsers: number; totalRooms: number; activeRooms: number; activeUsers: number; platform: string; env: string; }
 interface RegRow { day: string; count: number; }
 interface AdminUser { id: number; username: string; displayName: string | null; email: string | null; provider: string; isSiteAdmin: boolean; isBanned: boolean; isMuted?: boolean; adminNote?: string; createdAt: string; }
@@ -102,6 +107,19 @@ export default function AdminPage() {
   const [search, setSearch] = useState('');
   const [userFilter, setUserFilter] = useState<UserFilter>('all');
   const [roomFilter, setRoomFilter] = useState<RoomFilter>('all');
+  const [userSort, setUserSort] = useState<UserSort>('date');
+  const [roomSort, setRoomSort] = useState<RoomSort>('date');
+  const [sortAsc, setSortAsc] = useState(false);
+  const [msgCounts, setMsgCounts] = useState<MsgCount[]>([]);
+  const [roomsDaily, setRoomsDaily] = useState<RegRow[]>([]);
+  const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
+  const [globalSearch, setGlobalSearch] = useState('');
+  const [globalResults, setGlobalResults] = useState<GlobalSearchResult | null>(null);
+  const [globalSearching, setGlobalSearching] = useState(false);
+  const [transferSlug, setTransferSlug] = useState('');
+  const [transferVal, setTransferVal] = useState('');
+  const [announceSlug, setAnnounceSlug] = useState('');
+  const [announceMsg, setAnnounceMsg] = useState('');
   const [pushTitle, setPushTitle] = useState('');
   const [pushBody, setPushBody] = useState('');
   const [pushUserId, setPushUserId] = useState('');
@@ -133,16 +151,21 @@ export default function AdminPage() {
     setLoading(true);
     try {
       if (what === 'dashboard') {
-        const [s, l, r, e] = await Promise.all([
+        const [s, l, r, e, rd] = await Promise.all([
           apiFetch('/admin/stats').then(r => r.ok ? r.json() : null),
           apiFetch('/admin/stats/live').then(r => r.ok ? r.json() : null),
           apiFetch('/admin/stats/registrations').then(r => r.ok ? r.json() : []),
           apiFetch('/admin/stats/enhanced').then(r => r.ok ? r.json() : null),
+          apiFetch('/admin/stats/rooms-daily').then(r => r.ok ? r.json() : []),
         ]);
-        setStats(s); setLiveStats(l); setRegData(r); setEnhancedStats(e);
+        setStats(s); setLiveStats(l); setRegData(r); setEnhancedStats(e); setRoomsDaily(rd);
       } else if (what === 'users') {
-        const r = await apiFetch('/admin/users');
+        const [r, mc] = await Promise.all([
+          apiFetch('/admin/users'),
+          apiFetch('/admin/users/message-counts'),
+        ]);
         if (r.ok) setUsers(await r.json());
+        if (mc.ok) setMsgCounts(await mc.json());
       } else if (what === 'rooms') {
         const r = await apiFetch('/admin/rooms');
         if (r.ok) setRooms(await r.json());
@@ -163,11 +186,12 @@ export default function AdminPage() {
         if (r) { setSettings(r); setEditSettings(r); }
         setWordFilter(w);
       } else if (what === 'system') {
-        const [sys, subs] = await Promise.all([
+        const [sys, subs, al] = await Promise.all([
           apiFetch('/admin/system').then(r => r.ok ? r.json() : null),
           apiFetch('/admin/push-subscribers').then(r => r.ok ? r.json() : []),
+          apiFetch('/admin/activity-log').then(r => r.ok ? r.json() : []),
         ]);
-        setSystemInfo(sys); setPushSubs(subs);
+        setSystemInfo(sys); setPushSubs(subs); setActivityLog(al);
       }
     } catch (e) { console.error('[Admin] load error:', e); }
     finally { setLoading(false); }
@@ -190,24 +214,41 @@ export default function AdminPage() {
   if (!user?.isSiteAdmin) return null;
 
   // ── Filters ───────────────────────────────────────────────────────────────
-  const filteredUsers = users.filter(u => {
-    const q = search.toLowerCase();
-    const matchSearch = !q || u.username.toLowerCase().includes(q) || (u.email ?? '').toLowerCase().includes(q) || (u.displayName ?? '').toLowerCase().includes(q);
-    const matchFilter = userFilter === 'all' || (userFilter === 'admin' && u.isSiteAdmin) || (userFilter === 'banned' && u.isBanned) || (userFilter === 'muted' && u.isMuted);
-    return matchSearch && matchFilter;
-  });
+  const msgCountMap = new Map(msgCounts.map(m => [m.username, m.msg_count]));
 
-  const activeRoomSlugs = new Set(liveStats?.topRooms.map(r => r.slug) ?? []);
-  const filteredRooms = rooms.filter(r => {
-    const q = search.toLowerCase();
-    const matchSearch = !q || r.name.toLowerCase().includes(q) || r.slug.toLowerCase().includes(q);
-    const matchFilter = roomFilter === 'all'
-      || (roomFilter === 'active' && (r.activeUsers ?? 0) > 0)
-      || (roomFilter === 'frozen' && r.isFrozen)
-      || (roomFilter === 'public' && r.type === 'public')
-      || (roomFilter === 'private' && r.type === 'private');
-    return matchSearch && matchFilter;
-  });
+  const filteredUsers = users
+    .filter(u => {
+      const q = search.toLowerCase();
+      const matchSearch = !q || u.username.toLowerCase().includes(q) || (u.email ?? '').toLowerCase().includes(q) || (u.displayName ?? '').toLowerCase().includes(q);
+      const matchFilter = userFilter === 'all' || (userFilter === 'admin' && u.isSiteAdmin) || (userFilter === 'banned' && u.isBanned) || (userFilter === 'muted' && u.isMuted);
+      return matchSearch && matchFilter;
+    })
+    .sort((a, b) => {
+      let cmp = 0;
+      if (userSort === 'name') cmp = (a.username).localeCompare(b.username);
+      else if (userSort === 'id') cmp = a.id - b.id;
+      else cmp = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      return sortAsc ? -cmp : cmp;
+    });
+
+  const filteredRooms = rooms
+    .filter(r => {
+      const q = search.toLowerCase();
+      const matchSearch = !q || r.name.toLowerCase().includes(q) || r.slug.toLowerCase().includes(q);
+      const matchFilter = roomFilter === 'all'
+        || (roomFilter === 'active' && (r.activeUsers ?? 0) > 0)
+        || (roomFilter === 'frozen' && r.isFrozen)
+        || (roomFilter === 'public' && r.type === 'public')
+        || (roomFilter === 'private' && r.type === 'private');
+      return matchSearch && matchFilter;
+    })
+    .sort((a, b) => {
+      let cmp = 0;
+      if (roomSort === 'name') cmp = a.name.localeCompare(b.name);
+      else if (roomSort === 'active') cmp = (b.activeUsers ?? 0) - (a.activeUsers ?? 0);
+      else cmp = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      return sortAsc ? -cmp : cmp;
+    });
 
   const filteredIps = bannedIps.filter(b => b.ip.includes(search) || (b.reason ?? '').includes(search));
   const filteredChat = globalChat.filter(m => !search || m.username.includes(search) || m.content.includes(search) || (m.room_slug ?? '').includes(search));
@@ -295,6 +336,57 @@ export default function AdminPage() {
     if (res.ok) { setRooms(p => p.filter(x => x.slug !== r.slug)); showFeedback('تم حذف الغرفة'); }
   };
   const exportRooms = () => { window.open('/api/admin/rooms/export', '_blank'); };
+
+  // ── New Feature Actions ───────────────────────────────────────────────────
+
+  // F1: إيقاف جميع الغرف
+  const pauseAllRooms = async () => {
+    if (!confirm('إيقاف تشغيل الفيديو في جميع الغرف النشطة؟')) return;
+    const r = await apiFetch('/admin/rooms/pause-all', { method: 'POST' });
+    if (r.ok) { const d = await r.json(); showFeedback(`تم إيقاف ${d.paused} غرفة`); }
+  };
+
+  // F2: حظر IP المستخدم
+  const banUserIp = async (u: AdminUser) => {
+    const r = await apiFetch(`/admin/users/${u.id}/ban-ip`, { method: 'POST' });
+    if (r.ok) { const d = await r.json(); showFeedback(`تم حظر IP: ${d.ip}`); }
+    else { const d = await r.json(); showFeedback(d.error || 'لا يوجد IP محفوظ', false); }
+  };
+
+  // F3: نقل ملكية الغرفة
+  const transferOwner = async () => {
+    if (!transferSlug || !transferVal.trim()) return;
+    const r = await apiFetch(`/admin/rooms/${transferSlug}/transfer-owner`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ newOwnerUsername: transferVal.trim() }) });
+    if (r.ok) { const d = await r.json(); showFeedback(`تم نقل الملكية إلى @${d.newOwnerUsername}`); setTransferSlug(''); setTransferVal(''); }
+    else { const d = await r.json(); showFeedback(d.error || 'فشل', false); }
+  };
+
+  // F4: تصدير محادثة الغرفة CSV
+  const exportRoomChat = (slug: string) => { window.open(`/api/admin/rooms/${slug}/chat/export`, '_blank'); };
+
+  // F5: حذف غرف مستخدم
+  const deleteUserRooms = async (u: AdminUser) => {
+    if (!confirm(`حذف جميع غرف @${u.username}؟`)) return;
+    const r = await apiFetch(`/admin/users/${u.id}/rooms`, { method: 'DELETE' });
+    if (r.ok) { const d = await r.json(); showFeedback(`تم حذف ${d.deleted} غرفة`); load('users'); }
+  };
+
+  // F6: بحث عالمي
+  const doGlobalSearch = async () => {
+    if (globalSearch.length < 2) return;
+    setGlobalSearching(true);
+    const r = await apiFetch(`/admin/global-search?q=${encodeURIComponent(globalSearch)}`);
+    if (r.ok) setGlobalResults(await r.json());
+    setGlobalSearching(false);
+  };
+
+  // F7: إرسال إعلان لغرفة محددة
+  const sendRoomAnnounce = async () => {
+    if (!announceSlug || !announceMsg.trim()) return;
+    const r = await apiFetch(`/admin/rooms/${announceSlug}/announce`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: announceMsg }) });
+    if (r.ok) { showFeedback(`تم إرسال الإعلان إلى /${announceSlug}`); setAnnounceSlug(''); setAnnounceMsg(''); }
+    else showFeedback('فشل الإرسال', false);
+  };
 
   // ── Chat Actions ──────────────────────────────────────────────────────────
   const deleteMsg = async (id: number) => {
@@ -430,6 +522,38 @@ export default function AdminPage() {
         </div>
       )}
 
+      {/* Transfer owner modal */}
+      {transferSlug && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={() => setTransferSlug('')}>
+          <div className="bg-[#1a1a1b] rounded-2xl p-6 w-full max-w-sm border border-white/10" onClick={e => e.stopPropagation()}>
+            <h3 className="font-bold mb-1">نقل ملكية /{transferSlug}</h3>
+            <p className="text-white/40 text-xs mb-3">أدخل اسم المستخدم الجديد</p>
+            <input value={transferVal} onChange={e => setTransferVal(e.target.value)} placeholder="اسم المستخدم"
+              className={cn(inputCls, "mb-3")} onKeyDown={e => e.key === 'Enter' && transferOwner()} autoFocus />
+            <div className="flex gap-2">
+              <button onClick={transferOwner} className="flex-1 bg-cyan-500 hover:bg-cyan-400 text-black font-semibold py-2 rounded-xl text-sm">نقل</button>
+              <button onClick={() => setTransferSlug('')} className="flex-1 bg-white/10 py-2 rounded-xl text-sm">إلغاء</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Room announce modal */}
+      {announceSlug && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={() => setAnnounceSlug('')}>
+          <div className="bg-[#1a1a1b] rounded-2xl p-6 w-full max-w-sm border border-white/10" onClick={e => e.stopPropagation()}>
+            <h3 className="font-bold mb-1">إعلان في غرفة /{announceSlug}</h3>
+            <p className="text-white/40 text-xs mb-3">يظهر كرسالة نظام في الدردشة</p>
+            <textarea value={announceMsg} onChange={e => setAnnounceMsg(e.target.value)} rows={3} placeholder="نص الإعلان..."
+              className={cn(inputCls, "resize-none mb-3")} autoFocus />
+            <div className="flex gap-2">
+              <button onClick={sendRoomAnnounce} className="flex-1 bg-violet-500 hover:bg-violet-400 text-white font-semibold py-2 rounded-xl text-sm">إرسال</button>
+              <button onClick={() => setAnnounceSlug('')} className="flex-1 bg-white/10 py-2 rounded-xl text-sm">إلغاء</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Rename room modal */}
       {renameSlug && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={() => setRenameSlug('')}>
@@ -456,6 +580,9 @@ export default function AdminPage() {
           <button onClick={() => load(tab)} className="p-1.5 text-white/40 hover:text-white/80 rounded-lg hover:bg-white/5">
             <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
           </button>
+          <button onClick={pauseAllRooms} title="إيقاف جميع الغرف" className="p-1.5 text-red-400/60 hover:text-red-400 rounded-lg hover:bg-red-500/10">
+            <StopCircle className="w-4 h-4" />
+          </button>
           <button onClick={() => navigate('/home')} className="flex items-center gap-1 px-3 py-1.5 text-white/60 hover:text-white rounded-lg hover:bg-white/5 text-sm">
             <ChevronLeft className="w-4 h-4" />الرئيسية
           </button>
@@ -464,6 +591,60 @@ export default function AdminPage() {
           </button>
         </div>
       </header>
+
+      {/* Global Search */}
+      <div className="px-4 py-2 border-b border-white/5 bg-black/20">
+        <div className="flex gap-2 max-w-5xl mx-auto">
+          <div className="flex-1 relative">
+            <input value={globalSearch} onChange={e => setGlobalSearch(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && doGlobalSearch()}
+              placeholder="بحث عالمي: مستخدم، غرفة، بريد..." 
+              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs outline-none focus:border-cyan-500/30 pr-8" />
+            {globalSearching && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-white/30 text-[10px]">⟳</span>}
+          </div>
+          <button onClick={doGlobalSearch} className="px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-white/60">بحث</button>
+          {globalResults && <button onClick={() => { setGlobalResults(null); setGlobalSearch(''); }} className="text-white/30 hover:text-white/60 text-xs px-2">✕</button>}
+        </div>
+        {globalResults && (
+          <div className="mt-2 max-w-5xl mx-auto bg-[#1a1a1b] rounded-xl border border-white/10 p-3 space-y-3">
+            {globalResults.users.length > 0 && (
+              <div>
+                <div className="text-[10px] text-white/40 mb-1.5 font-semibold uppercase tracking-wider">مستخدمون ({globalResults.users.length})</div>
+                <div className="space-y-1">
+                  {globalResults.users.map((u: any) => (
+                    <div key={u.id} className="flex items-center gap-2 text-xs py-1 border-b border-white/5">
+                      <span className="text-cyan-400">@{u.username}</span>
+                      <span className="text-white/40">{u.display_name ?? ''}</span>
+                      {u.is_banned && <span className="text-[10px] text-red-400">محظور</span>}
+                      <button onClick={() => { setTab('users'); setSearch(u.username); setGlobalResults(null); }}
+                        className="text-white/30 hover:text-white/70 text-[10px] mr-auto">عرض</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {globalResults.rooms.length > 0 && (
+              <div>
+                <div className="text-[10px] text-white/40 mb-1.5 font-semibold uppercase tracking-wider">غرف ({globalResults.rooms.length})</div>
+                <div className="space-y-1">
+                  {globalResults.rooms.map((r: any) => (
+                    <div key={r.id} className="flex items-center gap-2 text-xs py-1 border-b border-white/5">
+                      <span className="text-violet-400">/{r.slug}</span>
+                      <span className="text-white/60">{r.name}</span>
+                      {r.is_frozen && <span className="text-[10px] text-blue-400">مجمّدة</span>}
+                      <button onClick={() => { setTab('rooms'); setSearch(r.slug); setGlobalResults(null); }}
+                        className="text-white/30 hover:text-white/70 text-[10px] mr-auto">عرض</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {globalResults.users.length === 0 && globalResults.rooms.length === 0 && (
+              <p className="text-white/30 text-xs text-center py-2">لا توجد نتائج</p>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Tabs */}
       <div className="flex border-b border-white/10 bg-black/20 overflow-x-auto no-scrollbar">
@@ -512,10 +693,16 @@ export default function AdminPage() {
               <StatCard label="محظورون" value={stats?.bannedUsers} color="text-red-400" icon={Ban} />
             </div>
 
-            {/* Registration chart */}
-            <div className="bg-white/5 rounded-xl p-4 border border-white/8">
-              <div className="text-xs text-white/50 mb-3 flex items-center gap-1.5"><BarChart3 className="w-3.5 h-3.5" />تسجيلات آخر 30 يوم</div>
-              <RegChart data={regData} />
+            {/* Charts row */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-white/5 rounded-xl p-4 border border-white/8">
+                <div className="text-xs text-white/50 mb-3 flex items-center gap-1.5"><Users className="w-3.5 h-3.5" />تسجيلات آخر 30 يوم</div>
+                <RegChart data={regData} />
+              </div>
+              <div className="bg-white/5 rounded-xl p-4 border border-white/8">
+                <div className="text-xs text-white/50 mb-3 flex items-center gap-1.5"><Home className="w-3.5 h-3.5" />غرف جديدة آخر 30 يوم</div>
+                <RegChart data={roomsDaily} />
+              </div>
             </div>
 
             {/* Provider breakdown */}
@@ -564,12 +751,22 @@ export default function AdminPage() {
               </button>
             </div>
             {/* Filter chips */}
-            <div className="flex gap-1.5 flex-wrap">
+            <div className="flex gap-1.5 flex-wrap items-center">
               {(['all', 'admin', 'banned', 'muted'] as UserFilter[]).map(f => (
                 <button key={f} onClick={() => setUserFilter(f)}
                   className={cn("px-3 py-1 rounded-full text-xs transition-colors",
                     userFilter === f ? "bg-cyan-500/30 text-cyan-400" : "bg-white/5 text-white/40 hover:text-white/70")}>
                   {f === 'all' ? `الكل (${users.length})` : f === 'admin' ? 'أدمن' : f === 'banned' ? 'محظور' : 'مكتوم'}
+                </button>
+              ))}
+              <span className="text-white/20 text-xs mr-2">|</span>
+              <span className="text-xs text-white/30">فرز:</span>
+              {(['date', 'name', 'id'] as UserSort[]).map(s => (
+                <button key={s} onClick={() => { if (userSort === s) setSortAsc(p => !p); else { setUserSort(s); setSortAsc(false); } }}
+                  className={cn("px-2 py-0.5 rounded text-[10px] transition-colors flex items-center gap-0.5",
+                    userSort === s ? "bg-cyan-500/20 text-cyan-400" : "bg-white/5 text-white/30 hover:text-white/60")}>
+                  {s === 'date' ? 'تاريخ' : s === 'name' ? 'اسم' : 'رقم'}
+                  {userSort === s && (sortAsc ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />)}
                 </button>
               ))}
             </div>
@@ -594,6 +791,11 @@ export default function AdminPage() {
                         {' · '}{u.provider} · {new Date(u.createdAt).toLocaleDateString('ar')}
                       </div>
                       {u.adminNote && <div className="text-[10px] text-amber-400/70 mt-1 flex items-center gap-1"><FileText className="w-3 h-3" />{u.adminNote}</div>}
+                      {msgCountMap.get(u.username) && (
+                        <span className="text-[10px] text-blue-400/70 mt-0.5 flex items-center gap-1">
+                          <MessageSquare className="w-2.5 h-2.5" />{msgCountMap.get(u.username)} رسالة
+                        </span>
+                      )}
                     </div>
                     {u.id !== user!.id && (
                       <div className="flex items-center gap-1 flex-shrink-0 flex-wrap justify-end">
@@ -621,7 +823,15 @@ export default function AdminPage() {
                           className={cn("p-1.5 rounded-lg transition-colors", u.isBanned ? "bg-green-500/10 text-green-400" : "bg-orange-500/10 text-orange-400")}>
                           {u.isBanned ? <CheckCircle className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
                         </button>
-                        <button onClick={() => deleteUser(u)} title="حذف"
+                        <button onClick={() => banUserIp(u)} title="حظر IP الأخير"
+                          className="p-1.5 rounded-lg bg-white/5 text-white/40 hover:text-red-400 transition-colors">
+                          <Hash className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => deleteUserRooms(u)} title="حذف جميع الغرف"
+                          className="p-1.5 rounded-lg bg-white/5 text-white/40 hover:text-orange-400 transition-colors">
+                          <Home className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => deleteUser(u)} title="حذف المستخدم"
                           className="p-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -685,12 +895,22 @@ export default function AdminPage() {
               </button>
             </div>
             {/* Filter chips */}
-            <div className="flex gap-1.5 flex-wrap">
+            <div className="flex gap-1.5 flex-wrap items-center">
               {(['all', 'active', 'frozen', 'public', 'private'] as RoomFilter[]).map(f => (
                 <button key={f} onClick={() => setRoomFilter(f)}
                   className={cn("px-3 py-1 rounded-full text-xs transition-colors",
                     roomFilter === f ? "bg-cyan-500/30 text-cyan-400" : "bg-white/5 text-white/40 hover:text-white/70")}>
                   {f === 'all' ? `الكل (${rooms.length})` : f === 'active' ? 'نشطة' : f === 'frozen' ? 'مجمّدة' : f === 'public' ? 'عامة' : 'خاصة'}
+                </button>
+              ))}
+              <span className="text-white/20 text-xs mr-2">|</span>
+              <span className="text-xs text-white/30">فرز:</span>
+              {(['date', 'name', 'active'] as RoomSort[]).map(s => (
+                <button key={s} onClick={() => { if (roomSort === s) setSortAsc(p => !p); else { setRoomSort(s); setSortAsc(false); } }}
+                  className={cn("px-2 py-0.5 rounded text-[10px] transition-colors flex items-center gap-0.5",
+                    roomSort === s ? "bg-violet-500/20 text-violet-400" : "bg-white/5 text-white/30 hover:text-white/60")}>
+                  {s === 'date' ? 'تاريخ' : s === 'name' ? 'اسم' : 'نشاط'}
+                  {roomSort === s && (sortAsc ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />)}
                 </button>
               ))}
             </div>
@@ -723,6 +943,9 @@ export default function AdminPage() {
                       <button onClick={() => clearChat(r)} title="مسح المحادثة" className="p-1.5 rounded-lg bg-white/5 text-white/40 hover:text-orange-400 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
                       <button onClick={() => clearPlaylist(r)} title="مسح قائمة التشغيل" className="p-1.5 rounded-lg bg-white/5 text-white/40 hover:text-red-400 transition-colors"><StopCircle className="w-3.5 h-3.5" /></button>
                       <button onClick={() => { setRenameSlug(r.slug); setRenameVal(r.name); }} title="إعادة التسمية" className="p-1.5 rounded-lg bg-white/5 text-white/40 hover:text-white/70 transition-colors"><Edit3 className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => { setTransferSlug(r.slug); setTransferVal(''); }} title="نقل الملكية" className="p-1.5 rounded-lg bg-white/5 text-white/40 hover:text-violet-400 transition-colors"><Zap className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => { setAnnounceSlug(r.slug); setAnnounceMsg(''); }} title="إرسال إعلان" className="p-1.5 rounded-lg bg-white/5 text-white/40 hover:text-amber-400 transition-colors"><Bell className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => exportRoomChat(r.slug)} title="تصدير المحادثة CSV" className="p-1.5 rounded-lg bg-white/5 text-white/40 hover:text-green-400 transition-colors"><Download className="w-3.5 h-3.5" /></button>
                       <button onClick={() => forceVideo(r, 'play')} title="تشغيل إجباري" className="p-1.5 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors"><Play className="w-3.5 h-3.5" /></button>
                       <button onClick={() => forceVideo(r, 'pause')} title="إيقاف إجباري" className="p-1.5 rounded-lg bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20 transition-colors"><Pause className="w-3.5 h-3.5" /></button>
                       <button onClick={() => window.open(`/room/${r.slug}`, '_blank')} title="دخول" className="p-1.5 rounded-lg bg-white/5 text-white/40 hover:text-white/70 transition-colors"><ExternalLink className="w-3.5 h-3.5" /></button>
@@ -973,6 +1196,42 @@ export default function AdminPage() {
               <p className="text-white/40 text-xs mb-3">تنزيل نسخة احتياطية تشمل: المستخدمين، الغرف، الإعدادات، IPs المحظورة</p>
               <button onClick={downloadBackup} className={btnCls("bg-green-500/20 text-green-400 hover:bg-green-500/30")}>
                 <Download className="w-4 h-4" />تنزيل النسخة الاحتياطية
+              </button>
+            </div>
+
+            {/* Activity Log */}
+            <div className="bg-white/5 rounded-xl p-4 border border-white/8">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm font-semibold flex items-center gap-2"><Activity className="w-4 h-4 text-orange-400" />سجل نشاط الأدمن ({activityLog.length})</div>
+                <button onClick={() => load('system')} className="text-xs text-white/30 hover:text-white/60 flex items-center gap-1"><RefreshCw className="w-3 h-3" />تحديث</button>
+              </div>
+              {activityLog.length === 0 ? (
+                <p className="text-white/30 text-sm">لا توجد سجلات</p>
+              ) : (
+                <div className="space-y-1.5 max-h-52 overflow-y-auto">
+                  {activityLog.map((entry, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs py-1 border-b border-white/5">
+                      <Activity className="w-2.5 h-2.5 text-orange-400/60 flex-shrink-0" />
+                      <span className="flex-1 text-white/70">{entry.action}</span>
+                      <span className="text-white/30 flex-shrink-0">@{entry.by}</span>
+                      <span className="text-white/20 flex-shrink-0">{new Date(entry.at).toLocaleString('ar')}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Room Announce from System */}
+            <div className="bg-white/5 rounded-xl p-4 border border-white/8">
+              <div className="text-sm font-semibold mb-3 flex items-center gap-2"><Bell className="w-4 h-4 text-amber-400" />إرسال إعلان لغرفة</div>
+              <div className="flex gap-2 mb-2">
+                <input value={announceSlug} onChange={e => setAnnounceSlug(e.target.value)} placeholder="slug الغرفة"
+                  className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-amber-500/50" />
+              </div>
+              <textarea value={announceMsg} onChange={e => setAnnounceMsg(e.target.value)} rows={2}
+                placeholder="نص الإعلان..." className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-amber-500/50 resize-none mb-2" />
+              <button onClick={sendRoomAnnounce} className={btnCls("bg-amber-500/20 text-amber-400 hover:bg-amber-500/30")}>
+                <Send className="w-4 h-4" />إرسال
               </button>
             </div>
           </div>

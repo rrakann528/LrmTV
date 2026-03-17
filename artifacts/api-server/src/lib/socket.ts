@@ -161,6 +161,16 @@ export function broadcastSystemMessage(message: string): void {
   }
 }
 
+export function sendRoomAnnouncement(slug: string, message: string): void {
+  if (!_io) return;
+  _io.to(slug).emit('chat-message', {
+    username: 'النظام',
+    content: message,
+    type: 'announcement',
+    createdAt: new Date().toISOString(),
+  });
+}
+
 export function kickUserFromAllRooms(userId: number): void {
   if (!_io) return;
   for (const [, state] of rooms) {
