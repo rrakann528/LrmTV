@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   MessageSquare, ListVideo, Users, UserPlus,
   Mic, MicOff, Video, VideoOff, Copy, Share2, Shield,
-  LogOut, LogIn, Settings2,
+  LogOut, LogIn, Settings2, Play,
 } from 'lucide-react';
 import { DraggableCam } from '@/components/draggable-cam';
 
@@ -75,6 +75,9 @@ export default function RoomPage() {
   const [copied, setCopied]     = useState(false);
   const [isSeeking]             = useState(false);
   const [playerReady, setPlayerReady] = useState(false);
+  // "Click to Watch" gate — prevents auto-play buffering lag on join.
+  // Set to true only when the user explicitly clicks to start watching.
+  const [watcherReady, setWatcherReady] = useState(false);
 
   // Room settings panel (admin only) — controlled from header button
   const [showRoomSettings, setShowRoomSettings] = useState(false);
@@ -153,11 +156,17 @@ export default function RoomPage() {
   // so the sync effect doesn't issue a seek immediately after the initial buffer load.
   const readyTimeRef = useRef<number>(0);
 
-  // Reset playerReady whenever the video URL changes so the initial-seek gate resets
+  // Reset playerReady and watcherReady whenever the video URL changes
   useEffect(() => {
     setPlayerReady(false);
     readyTimeRef.current = 0;
+    setWatcherReady(false);
   }, [syncState.url]);
+
+  // DJs/admins are always "ready" — no overlay needed for the room host
+  useEffect(() => {
+    if (isDJ) setWatcherReady(true);
+  }, [isDJ]);
 
   // Sync effect — thresholds differ by source to avoid buffering-on-join stuttering.
   // heartbeat: correct only if >8s off (gentle drift correction)
@@ -187,7 +196,7 @@ export default function RoomPage() {
     if (diff > threshold) {
       isRemoteSeekRef.current = true;
       playerRef.current.seekTo(syncState.time, 'seconds');
-      setTimeout(() => { isRemoteSeekRef.current = false; }, 600);
+      setTimeout(() => { isRemoteSeekRef.current = false; }, 1500);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncState.time, syncState.playing, syncState.source, syncState.isLive, isSeeking, playerReady]);
@@ -408,27 +417,46 @@ export default function RoomPage() {
               md+     → flex-grow (fills all available height) */}
           <div className="w-full aspect-video md:aspect-auto md:flex-grow relative bg-black">
             {syncState.url ? (
-              <SmartPlayer
-                ref={playerRef}
-                url={syncState.url}
-                playing={syncState.playing}
-                controls={canControl}
-                canControl={canControl}
-                initialTime={syncState.time}
-                isLiveHint={syncState.isLive}
-                onIsLive={emitStreamType}
-                onReady={() => { readyTimeRef.current = Date.now(); setPlayerReady(true); }}
-                onPlay={handlePlay}
-                onPause={handlePause}
-                onSeek={handleSeek}
-                chatMessages={chatMessages}
-                username={username}
-                onSendChatMessage={emitChatMessage}
-                onFocusChat={() => setActiveTab('chat')}
-                lang={lang as 'en' | 'ar'}
-                onSubtitleApplied={emitSubtitleSync}
-                externalSubtitle={subtitleSync}
-              />
+              <>
+                <SmartPlayer
+                  ref={playerRef}
+                  url={syncState.url}
+                  playing={syncState.playing && watcherReady}
+                  controls={canControl && watcherReady}
+                  canControl={canControl && watcherReady}
+                  initialTime={syncState.time}
+                  isLiveHint={syncState.isLive}
+                  onIsLive={emitStreamType}
+                  onReady={() => { readyTimeRef.current = Date.now(); setPlayerReady(true); }}
+                  onPlay={handlePlay}
+                  onPause={handlePause}
+                  onSeek={handleSeek}
+                  chatMessages={chatMessages}
+                  username={username}
+                  onSendChatMessage={emitChatMessage}
+                  onFocusChat={() => setActiveTab('chat')}
+                  lang={lang as 'en' | 'ar'}
+                  onSubtitleApplied={emitSubtitleSync}
+                  externalSubtitle={subtitleSync}
+                />
+                {/* "Click to Watch" overlay — shown to non-DJs joining a live session */}
+                {!watcherReady && syncState.url && (
+                  <div
+                    className="absolute inset-0 z-30 flex items-center justify-center bg-black/75 cursor-pointer select-none"
+                    onClick={() => { requestSync(); setWatcherReady(true); }}
+                  >
+                    <div className="text-center space-y-4">
+                      <div className="w-24 h-24 rounded-full bg-white/15 backdrop-blur-md flex items-center justify-center mx-auto border-2 border-white/30 hover:bg-white/25 transition-colors">
+                        <Play className="w-12 h-12 text-white fill-white ms-1" />
+                      </div>
+                      <div>
+                        <p className="text-white text-xl font-bold">اضغط للمشاهدة</p>
+                        <p className="text-white/50 text-sm mt-1">Click to Watch</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-white/40 gap-3">
                 <ListVideo className="w-12 h-12 opacity-30" />

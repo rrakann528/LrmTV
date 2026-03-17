@@ -987,6 +987,9 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
           onSeeked={() => {
             // Skip broadcasting nudges used by the stall-recovery watchdog
             if (isInternalNudgeRef.current) return;
+            // Ignore seeks that happen before the player is ready (e.g. initial load to position 0)
+            // These would incorrectly broadcast seek(0) to all room members.
+            if (!readyFiredRef.current) return;
             if (videoRef.current) onSeek?.(videoRef.current.currentTime);
           }}
         />

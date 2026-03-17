@@ -551,6 +551,8 @@ export function initSocketServer(httpServer: HttpServer): Server {
         case "seek":
           roomState.currentTime = data.currentTime;
           roomState.lastSyncTimestamp = Date.now();
+          // Restart heartbeat after seek so drift-correction fires from the new position
+          if (roomState.isPlaying) startHeartbeat(io, roomState);
           break;
         case "change-video":
           roomState.currentVideo = data.url || null;
@@ -968,7 +970,10 @@ export function initSocketServer(httpServer: HttpServer): Server {
       const wasDjBackgrounding = roomState.djBackgrounding?.socketId === socket.id;
       const isAdminOrDj = user?.isAdmin || user?.isDJ;
 
-      const AUTO_PAUSE_WINDOW = 3000;
+      // Give the browser 8 s to send its auto-pause before disconnect arrives.
+      // Only admins/DJs can trigger a play-restore — prevents guests from
+      // accidentally resetting the video when they leave.
+      const AUTO_PAUSE_WINDOW = 8_000;
       const wasAutoPaused =
         !roomState.isPlaying &&
         roomState.lastPauseBy === socket.id &&
@@ -978,7 +983,7 @@ export function initSocketServer(httpServer: HttpServer): Server {
       const shouldRestorePlay =
         roomState.users.size > 0 &&
         roomState.currentVideo &&
-        (isAdminOrDj || roomState.lastPauseBy === socket.id) &&
+        isAdminOrDj &&
         (wasDjBackgrounding || wasAutoPaused);
 
       if (shouldRestorePlay && !roomState.isPlaying) {
@@ -1018,7 +1023,7 @@ function startHeartbeat(io: Server, state: RoomState) {
       isLive: state.isLive,
       serverTs: Date.now(),
     });
-  }, 5000);
+  }, 3000);
 }
 
 function stopHeartbeat(state: RoomState) {
