@@ -122,6 +122,8 @@ export default function AdminPage() {
   const [transferVal, setTransferVal] = useState('');
   const [announceSlug, setAnnounceSlug] = useState('');
   const [announceMsg, setAnnounceMsg] = useState('');
+  const [sysAnnounceSlug, setSysAnnounceSlug] = useState('');
+  const [sysAnnounceMsg, setSysAnnounceMsg] = useState('');
   const [pushTitle, setPushTitle] = useState('');
   const [pushBody, setPushBody] = useState('');
   const [pushUserId, setPushUserId] = useState('');
@@ -1223,13 +1225,16 @@ export default function AdminPage() {
             {/* Room Announce from System */}
             <div className="bg-white/5 rounded-xl p-4 border border-white/8">
               <div className="text-sm font-semibold mb-3 flex items-center gap-2"><Bell className="w-4 h-4 text-amber-400" />إرسال إعلان لغرفة</div>
-              <div className="flex gap-2 mb-2">
-                <input value={announceSlug} onChange={e => setAnnounceSlug(e.target.value)} placeholder="slug الغرفة"
-                  className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-amber-500/50" />
-              </div>
-              <textarea value={announceMsg} onChange={e => setAnnounceMsg(e.target.value)} rows={2}
+              <input value={sysAnnounceSlug} onChange={e => setSysAnnounceSlug(e.target.value)} placeholder="slug الغرفة"
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-amber-500/50 mb-2" />
+              <textarea value={sysAnnounceMsg} onChange={e => setSysAnnounceMsg(e.target.value)} rows={2}
                 placeholder="نص الإعلان..." className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-amber-500/50 resize-none mb-2" />
-              <button onClick={sendRoomAnnounce} className={btnCls("bg-amber-500/20 text-amber-400 hover:bg-amber-500/30")}>
+              <button onClick={async () => {
+                if (!sysAnnounceSlug.trim() || !sysAnnounceMsg.trim()) return;
+                const r = await apiFetch(`/admin/rooms/${sysAnnounceSlug.trim()}/announce`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: sysAnnounceMsg }) });
+                if (r.ok) { showFeedback(`تم إرسال الإعلان إلى /${sysAnnounceSlug}`); setSysAnnounceSlug(''); setSysAnnounceMsg(''); }
+                else showFeedback('فشل الإرسال', false);
+              }} className={btnCls("bg-amber-500/20 text-amber-400 hover:bg-amber-500/30")}>
                 <Send className="w-4 h-4" />إرسال
               </button>
             </div>
