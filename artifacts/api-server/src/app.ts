@@ -19,7 +19,6 @@ import {
 // ── Cache site settings in memory (refresh every 30s) ─────────────────────────
 let _bannedIps = new Set<string>();
 let _maintenanceMode = false;
-let _registrationEnabled = true;
 
 async function refreshSiteCache() {
   try {
@@ -30,13 +29,12 @@ async function refreshSiteCache() {
     _bannedIps = new Set(ips.map(r => r.ip));
     const settingMap = new Map(settings.map(s => [s.key, s.value]));
     _maintenanceMode = settingMap.get("maintenance_mode") === "true";
-    _registrationEnabled = settingMap.get("registration_enabled") !== "false";
   } catch { /* DB not ready yet */ }
 }
 refreshSiteCache();
 setInterval(refreshSiteCache, 30_000);
 
-export function isRegistrationEnabled() { return _registrationEnabled; }
+export function isRegistrationEnabled() { return true; }
 
 // ── IP ban middleware ─────────────────────────────────────────────────────────
 function ipBanMiddleware(req: Request, res: Response, next: NextFunction): void {

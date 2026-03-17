@@ -290,7 +290,7 @@ router.post("/admin/broadcast", requireSiteAdmin, async (req, res): Promise<void
 
 const DEFAULT_SETTINGS: Record<string, string> = {
   maintenance_mode: "false",
-  registration_enabled: "true",
+
   announcement: "",
   welcome_message: "",
   max_rooms_per_user: "10",

@@ -31,7 +31,7 @@ interface AdminRoom { id: number; slug: string; name: string; type: string; isFr
 interface PlaylistItem { id: number; url: string; title: string; sourceType: string; }
 interface BannedIp { id: number; ip: string; reason: string; createdAt: string; }
 interface LoginAttempt { id: number; identifier: string; ip: string; createdAt: string; }
-interface SiteSettings { maintenance_mode: string; registration_enabled: string; announcement: string; welcome_message: string; max_rooms_per_user: string; max_room_members: string; }
+interface SiteSettings { maintenance_mode: string; announcement: string; welcome_message: string; max_rooms_per_user: string; max_room_members: string; }
 interface ChatMsg { id: number; username: string; content: string; type: string; created_at: string; room_slug?: string; room_name?: string; }
 interface PushSub { id: number; endpoint: string; created_at: string; username: string; user_id: number; }
 
@@ -80,6 +80,8 @@ function StatCard({ label, value, color, icon: Icon, sub }: { label: string; val
     </div>
   );
 }
+
+const DEFAULT_SITE_SETTINGS: SiteSettings = { maintenance_mode: 'false', announcement: '', welcome_message: '', max_rooms_per_user: '10', max_room_members: '100' };
 
 export default function AdminPage() {
   const { user, logout } = useAuth();
@@ -151,14 +153,16 @@ export default function AdminPage() {
     setLoading(true);
     try {
       if (what === 'dashboard') {
-        const [s, l, r, e, rd] = await Promise.all([
+        const [s, l, r, e, rd, st] = await Promise.all([
           apiFetch('/admin/stats').then(r => r.ok ? r.json() : null),
           apiFetch('/admin/stats/live').then(r => r.ok ? r.json() : null),
           apiFetch('/admin/stats/registrations').then(r => r.ok ? r.json() : []),
           apiFetch('/admin/stats/enhanced').then(r => r.ok ? r.json() : null),
           apiFetch('/admin/stats/rooms-daily').then(r => r.ok ? r.json() : []),
+          apiFetch('/admin/settings').then(r => r.ok ? r.json() : null),
         ]);
         setStats(s); setLiveStats(l); setRegData(r); setEnhancedStats(e); setRoomsDaily(rd);
+        if (st) { setSettings(st); setEditSettings(st); }
       } else if (what === 'users') {
         const [r, mc] = await Promise.all([
           apiFetch('/admin/users'),
@@ -180,10 +184,10 @@ export default function AdminPage() {
         setBannedIps(b); setLoginAttempts(l);
       } else if (what === 'settings') {
         const [r, w] = await Promise.all([
-          apiFetch('/admin/settings').then(r => r.ok ? r.json() : null),
+          apiFetch('/admin/settings').then(r => r.ok ? r.json() : DEFAULT_SITE_SETTINGS),
           apiFetch('/admin/word-filter').then(r => r.ok ? r.json() : []),
         ]);
-        if (r) { setSettings(r); setEditSettings(r); }
+        setSettings(r); setEditSettings(r);
         setWordFilter(w);
       } else if (what === 'system') {
         const [sys, subs, al] = await Promise.all([
@@ -666,13 +670,9 @@ export default function AdminPage() {
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
               <div className="text-xs text-amber-400 font-semibold mb-2 flex items-center gap-1.5"><Zap className="w-3.5 h-3.5" />إجراءات سريعة</div>
               <div className="flex flex-wrap gap-2">
-                <button onClick={async () => { const v = settings?.maintenance_mode === 'true' ? 'false' : 'true'; await apiFetch('/admin/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ maintenance_mode: v }) }); showFeedback(v === 'true' ? 'تم تفعيل الصيانة' : 'تم إلغاء الصيانة'); }}
-                  className="text-xs px-3 py-1.5 bg-amber-500/20 text-amber-400 rounded-lg hover:bg-amber-500/30">
+                <button onClick={async () => { const v = settings?.maintenance_mode === 'true' ? 'false' : 'true'; const r = await apiFetch('/admin/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ maintenance_mode: v }) }); if (r.ok) { setSettings(p => p ? { ...p, maintenance_mode: v } : p); setEditSettings(p => ({ ...p, maintenance_mode: v })); showFeedback(v === 'true' ? 'تم تفعيل الصيانة' : 'تم إلغاء الصيانة'); } }}
+                  className={cn("text-xs px-3 py-1.5 rounded-lg transition-colors", settings?.maintenance_mode === 'true' ? "bg-green-500/20 text-green-400 hover:bg-green-500/30" : "bg-amber-500/20 text-amber-400 hover:bg-amber-500/30")}>
                   {settings?.maintenance_mode === 'true' ? '✅ إلغاء الصيانة' : '🔧 وضع الصيانة'}
-                </button>
-                <button onClick={async () => { const v = settings?.registration_enabled === 'false' ? 'true' : 'false'; await apiFetch('/admin/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ registration_enabled: v }) }); showFeedback(v === 'true' ? 'تم تفعيل التسجيل' : 'تم إيقاف التسجيل'); }}
-                  className="text-xs px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30">
-                  {settings?.registration_enabled === 'false' ? '✅ تفعيل التسجيل' : '🚫 إيقاف التسجيل'}
                 </button>
                 <button onClick={() => setTab('notifications')} className="text-xs px-3 py-1.5 bg-violet-500/20 text-violet-400 rounded-lg hover:bg-violet-500/30">
                   📣 بث رسالة
@@ -1033,8 +1033,7 @@ export default function AdminPage() {
             {settings ? (
               <>
                 {[
-                  { key: 'maintenance_mode',    label: 'وضع الصيانة',             type: 'toggle', desc: 'يمنع الوصول لغير الأدمن' },
-                  { key: 'registration_enabled', label: 'السماح بالتسجيل',         type: 'toggle', desc: 'السماح لمستخدمين جدد بالتسجيل' },
+                  { key: 'maintenance_mode',     label: 'وضع الصيانة',             type: 'toggle', desc: 'يمنع الوصول لغير الأدمن' },
                   { key: 'announcement',         label: 'إعلان الموقع',             type: 'text',   desc: 'يظهر في الصفحة الرئيسية' },
                   { key: 'welcome_message',      label: 'رسالة الترحيب',            type: 'text',   desc: 'تظهر في صفحة الهبوط' },
                   { key: 'max_rooms_per_user',   label: 'الحد الأقصى للغرف/مستخدم', type: 'number', desc: '' },
