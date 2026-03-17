@@ -456,6 +456,7 @@ export default function RoomPage() {
                   initialTime={syncState.time}
                   isLiveHint={syncState.isLive}
                   onIsLive={emitStreamType}
+                  preferServerProxy={true}
                   onReady={() => { readyTimeRef.current = Date.now(); setPlayerReady(true); }}
                   onPlay={handlePlay}
                   onPause={handlePause}

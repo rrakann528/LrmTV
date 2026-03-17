@@ -105,6 +105,8 @@ interface SmartPlayerProps {
   isLiveHint?: boolean;
   /** Fired when HLS manifest is parsed and live/VOD status is known */
   onIsLive?: (isLive: boolean) => void;
+  /** Route HLS through the API server proxy first — ensures identical experience for all viewers */
+  preferServerProxy?: boolean;
 }
 
 export const SmartPlayer = forwardRef<SmartPlayerHandle, SmartPlayerProps>(
@@ -128,6 +130,7 @@ export const SmartPlayer = forwardRef<SmartPlayerHandle, SmartPlayerProps>(
       externalSubtitle,
       isLiveHint = false,
       onIsLive,
+      preferServerProxy = false,
     },
     ref,
   ) => {
@@ -416,6 +419,7 @@ export const SmartPlayer = forwardRef<SmartPlayerHandle, SmartPlayerProps>(
             externalSubtitle={externalSubtitle}
             isLiveHint={isLiveHint}
             onIsLive={onIsLive}
+            preferServerProxy={preferServerProxy}
           />
         </div>
       );

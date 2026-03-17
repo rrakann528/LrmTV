@@ -105,6 +105,12 @@ interface HlsPlayerProps {
   isLiveHint?: boolean;
   /** Fired after the manifest loads and live/VOD status is determined */
   onIsLive?: (isLive: boolean) => void;
+  /**
+   * When true, HLS is loaded through the API server proxy first (/api/proxy/manifest).
+   * This ensures a consistent experience: if the server cannot reach the stream
+   * (IP-locked CDN), the error is shown to everyone including the room host.
+   */
+  preferServerProxy?: boolean;
 }
 
 export interface HlsPlayerHandle {
@@ -136,6 +142,7 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
       externalSubtitle,
       isLiveHint = false,
       onIsLive,
+      preferServerProxy = false,
     },
     ref,
   ) => {
@@ -742,6 +749,15 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
           hls.loadSource(cfUrl);
           hls.attachMedia(video);
         };
+
+        // preferServerProxy mode: skip direct/native stages entirely.
+        // All traffic goes through the API server proxy so the experience is
+        // identical for every viewer — if the server can't reach the stream,
+        // everyone (including the room host) sees the same error.
+        if (preferServerProxy) {
+          s6_apiServerProxy();
+          return;
+        }
 
         // HTTP src on HTTPS page → browser blocks it as mixed content.
         // Skip direct/native stages and go straight to the server proxy (S6),
