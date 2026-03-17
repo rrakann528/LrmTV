@@ -1,6 +1,16 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY || "");
+// Lazy init — avoids crash on startup when RESEND_API_KEY is not yet set
+let _resend: Resend | null = null;
+function getResend(): Resend {
+  if (!_resend) {
+    const key = process.env.RESEND_API_KEY;
+    if (!key) throw new Error("RESEND_API_KEY not set in environment");
+    _resend = new Resend(key);
+  }
+  return _resend;
+}
+
 const FROM = process.env.SMTP_FROM || "LrmTV <support@lrmtv.sbs>";
 
 export async function verifySmtp(): Promise<{ ok: boolean; error?: string }> {
@@ -11,7 +21,7 @@ export async function verifySmtp(): Promise<{ ok: boolean; error?: string }> {
 }
 
 export async function sendOtpEmail(to: string, code: string): Promise<void> {
-  const { error } = await resend.emails.send({
+  const { error } = await getResend().emails.send({
     from: FROM,
     to,
     subject: `${code} — رمز التحقق من LrmTV`,
