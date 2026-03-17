@@ -216,6 +216,8 @@ export function initSocketServer(httpServer: HttpServer): Server {
       methods: ["GET", "POST"],
     },
     path: "/api/socket.io",
+    // HLS .ts segments can be 1-5 MB — raise limit so relay doesn't silently drop them
+    maxHttpBufferSize: 10 * 1024 * 1024, // 10 MB
   });
   _io = io;
 

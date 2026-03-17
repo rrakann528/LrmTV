@@ -9,13 +9,18 @@ export function useRelayHost(socket: Socket | null, enabled: boolean) {
       if (!data?.requestId || !data?.url) return;
 
       try {
+        // Build a browser-like request so IP-restricted CDNs don't reject us
+        const urlObj = new URL(data.url);
         const res = await fetch(data.url, {
           headers: {
             'Accept': '*/*',
             'Accept-Language': 'en-US,en;q=0.9',
+            'Origin': urlObj.origin,
+            'Referer': urlObj.origin + '/',
           },
           credentials: 'omit',
           cache: 'no-store',
+          mode: 'cors',
         });
 
         if (!res.ok) {
