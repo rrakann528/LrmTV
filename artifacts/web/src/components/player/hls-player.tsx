@@ -692,14 +692,28 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
           video.addEventListener('error',          onErrWrapped,  { once: true });
         };
 
+        // S6 — API server proxy: manifest + ALL segments rewritten through our own server.
+        // Always available (no external CF_PROXY required). The server fetches from its
+        // own IP, which bypasses CORS, mixed-content, and Referer-protected CDNs.
+        // This is the last resort before showing the ip-locked error screen.
+        const s6_apiServerProxy = () => {
+          if (cancelled) return;
+          setStatusMsg('hls-proxy');
+          const proxyUrl = `/api/proxy/manifest?url=${encodeURIComponent(src)}`;
+          const hls = makeHls(() => { setError('ip-locked'); setStatusMsg(null); });
+          hlsRef.current = hls;
+          hls.loadSource(proxyUrl);
+          hls.attachMedia(video);
+        };
+
         // S5 — CF Worker full proxy: manifest + ALL segments rewritten to go through Cloudflare
         // (mode=full tells the Worker to rewrite segment URLs back to itself)
         const s5_cfFullProxy = () => {
           if (cancelled) return;
-          if (!CF_PROXY) { setError('ip-locked'); setStatusMsg(null); return; }
+          if (!CF_PROXY) { s6_apiServerProxy(); return; }
           const cfUrl = `${CF_PROXY}?url=${encodeURIComponent(src)}&ref=${encodeURIComponent(src)}&mode=full`;
           setStatusMsg('hls-proxy');
-          const hls = makeHls(() => { setError('ip-locked'); setStatusMsg(null); });
+          const hls = makeHls(() => s6_apiServerProxy());
           hlsRef.current = hls;
           hls.loadSource(cfUrl);
           hls.attachMedia(video);
@@ -729,28 +743,30 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
           hls.attachMedia(video);
         };
 
-        // HTTP src on HTTPS page → browser blocks it as mixed content → skip straight to CF full proxy
+        // HTTP src on HTTPS page → browser blocks it as mixed content.
+        // Skip direct/native stages and go straight to the server proxy (S6),
+        // which fetches the stream over HTTPS from the server side.
         if (src.startsWith('http:') && window.location.protocol === 'https:') {
-          s5_cfFullProxy();
+          s6_apiServerProxy();
           return;
         }
 
         // S1 — HLS.js direct (best features: adaptive bitrate, quality switching)
-        // On failure: Safari → S2 native → S3 CF-manifest → S4 CF-full → S5 CF-full+rewrite
-        //             Chrome → S3 CF-manifest → S4 CF-full → S5 CF-full+rewrite
+        // Failure chain: Safari → S2 native → S3 CF-manifest → S4 CF-full → S5 CF-full+rewrite → S6 API proxy
+        //                Chrome →              S3 CF-manifest → S4 CF-full → S5 CF-full+rewrite → S6 API proxy
         setStatusMsg('hls-direct');
         if (Hls.isSupported()) {
           const canNativeHls = video.canPlayType('application/vnd.apple.mpegurl') !== '';
           const onS1Fail = canNativeHls
-            ? () => s2_native(() => CF_PROXY ? s3_cfManifestProxy() : s5_cfFullProxy())
-            : () => CF_PROXY ? s3_cfManifestProxy() : s5_cfFullProxy();
+            ? () => s2_native(() => CF_PROXY ? s3_cfManifestProxy() : s6_apiServerProxy())
+            : () => CF_PROXY ? s3_cfManifestProxy() : s6_apiServerProxy();
           const hls = makeHls(onS1Fail);
           hlsRef.current = hls;
           hls.loadSource(src);
           hls.attachMedia(video);
         } else if (video.canPlayType('application/vnd.apple.mpegurl') !== '') {
           // Safari (iOS/macOS) without MSE: native HLS only
-          s2_native(() => CF_PROXY ? s3_cfManifestProxy() : s5_cfFullProxy());
+          s2_native(() => CF_PROXY ? s3_cfManifestProxy() : s6_apiServerProxy());
         } else {
           setStatusMsg(null); setError('unsupported');
         }
