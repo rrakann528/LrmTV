@@ -108,6 +108,21 @@ export default function ChatPanel({
           const isLastInGroup  = !nextMsg || nextMsg.type === 'system'  || nextMsg.username !== msg.username;
 
           if (isSystem) {
+            // Admin broadcast messages (from 'النظام') appear as prominent banners
+            const isAdminBroadcast = msg.username === 'النظام';
+            if (isAdminBroadcast) {
+              return (
+                <div key={msg.id || i} className="flex justify-center my-3">
+                  <div className="w-full bg-cyan-500/15 border border-cyan-500/40 rounded-xl px-4 py-2.5 flex items-start gap-2">
+                    <span className="text-cyan-400 mt-0.5 shrink-0">📢</span>
+                    <div>
+                      <p className="text-[10px] font-bold text-cyan-400 mb-0.5">رسالة من الإدارة</p>
+                      <p className="text-xs text-white/90 leading-relaxed">{msg.content}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
             return (
               <div key={msg.id || i} className="flex justify-center my-2">
                 <span className="bg-white/10 px-3 py-1 rounded-full text-xs text-white/50">

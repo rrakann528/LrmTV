@@ -187,23 +187,28 @@ export function getActiveRoomsDetailed(): { slug: string; userCount: number; isP
 
 export function broadcastSystemMessage(message: string): void {
   if (!_io) return;
-  for (const slug of rooms.keys()) {
+  const now = new Date().toISOString();
+  for (const [slug, roomState] of rooms.entries()) {
     _io.to(slug).emit('chat-message', {
-      id: `sys-${Date.now()}`,
+      id: Date.now(),
+      roomId: roomState.roomId,
       content: message,
-      username: '🔔 النظام',
-      timestamp: new Date().toISOString(),
-      isSystem: true,
+      username: 'النظام',
+      type: 'system',
+      createdAt: now,
     });
   }
 }
 
 export function sendRoomAnnouncement(slug: string, message: string): void {
   if (!_io) return;
+  const roomState = rooms.get(slug);
   _io.to(slug).emit('chat-message', {
+    id: Date.now(),
+    roomId: roomState?.roomId,
     username: 'النظام',
     content: message,
-    type: 'announcement',
+    type: 'system',
     createdAt: new Date().toISOString(),
   });
 }
