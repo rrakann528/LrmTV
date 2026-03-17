@@ -1,4 +1,4 @@
-import { Suspense, lazy, Component, type ReactNode } from "react";
+import { Suspense, lazy, Component, useEffect, useState, type ReactNode } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -66,6 +66,37 @@ function PageLoader() {
   );
 }
 
+function SiteAnnouncementBanner() {
+  const [announcement, setAnnouncement] = useState("");
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/public/site-info")
+      .then(r => r.json())
+      .then(d => { if (d.announcement) setAnnouncement(d.announcement); })
+      .catch(() => {});
+  }, []);
+
+  if (!announcement || dismissed) return null;
+
+  return (
+    <div style={{
+      position: "fixed", top: 0, left: 0, right: 0, zIndex: 9999,
+      background: "linear-gradient(90deg, #7c3aed, #2563eb)",
+      color: "#fff", padding: "10px 16px",
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      fontSize: "14px", fontFamily: "sans-serif", direction: "rtl",
+      boxShadow: "0 2px 8px rgba(0,0,0,0.4)"
+    }}>
+      <span>📢 {announcement}</span>
+      <button
+        onClick={() => setDismissed(true)}
+        style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: "0 4px" }}
+      >×</button>
+    </div>
+  );
+}
+
 function Router() {
   return (
     <Suspense fallback={<PageLoader />}>
@@ -88,6 +119,7 @@ function App() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <I18nProvider>
+          <SiteAnnouncementBanner />
           <PwaInstallBanner />
           <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
             <InviteBanner />

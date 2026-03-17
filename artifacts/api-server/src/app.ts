@@ -5,7 +5,7 @@ import helmet from "helmet";
 import path from "path";
 import { existsSync } from "fs";
 import router from "./routes";
-import { db, bannedIpsTable, siteSettingsTable } from "@workspace/db";
+import { db, bannedIpsTable } from "@workspace/db";
 import {
   botDetection,
   generalLimiter,
@@ -15,24 +15,19 @@ import {
   pathGuard,
   securityHeaders,
 } from "./middlewares/security";
+import { getCachedSetting, refreshSettingsCache } from "./lib/settings";
 
-// ── Cache site settings in memory (refresh every 30s) ─────────────────────────
+// ── Cache banned IPs in memory (refresh every 30s) ───────────────────────────
 let _bannedIps = new Set<string>();
-let _maintenanceMode = false;
 
-async function refreshSiteCache() {
+async function refreshBannedIps() {
   try {
-    const [ips, settings] = await Promise.all([
-      db.select({ ip: bannedIpsTable.ip }).from(bannedIpsTable),
-      db.select().from(siteSettingsTable),
-    ]);
+    const ips = await db.select({ ip: bannedIpsTable.ip }).from(bannedIpsTable);
     _bannedIps = new Set(ips.map(r => r.ip));
-    const settingMap = new Map(settings.map(s => [s.key, s.value]));
-    _maintenanceMode = settingMap.get("maintenance_mode") === "true";
   } catch { /* DB not ready yet */ }
 }
-refreshSiteCache();
-setInterval(refreshSiteCache, 30_000);
+refreshBannedIps();
+setInterval(refreshBannedIps, 30_000);
 
 export function isRegistrationEnabled() { return true; }
 
@@ -46,12 +41,16 @@ function ipBanMiddleware(req: Request, res: Response, next: NextFunction): void 
 // ── Maintenance mode middleware ────────────────────────────────────────────────
 // NOTE: mounted on /api — so req.path is relative, e.g. /auth/google not /api/auth/google
 function maintenanceMiddleware(req: Request, res: Response, next: NextFunction): void {
-  if (!_maintenanceMode) { next(); return; }
+  if (getCachedSetting("maintenance_mode") !== "true") { next(); return; }
   if (req.path.startsWith("/admin") || req.path.startsWith("/auth")) {
     next(); return;
   }
   res.status(503).json({ error: "الموقع في وضع الصيانة. يرجى المحاولة لاحقاً." });
 }
+
+// Expose for admin routes to call after ban-ip changes
+export function refreshIpCache() { refreshBannedIps(); }
+export function refreshAllCaches() { refreshBannedIps(); refreshSettingsCache(); }
 
 const app: Express = express();
 

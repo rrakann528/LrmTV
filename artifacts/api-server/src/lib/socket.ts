@@ -1,7 +1,8 @@
 import { Server as HttpServer } from "http";
 import { Server, Socket } from "socket.io";
-import { db, chatMessagesTable, roomsTable, playlistItemsTable, roomInvitesTable } from "@workspace/db";
+import { db, chatMessagesTable, roomsTable, playlistItemsTable, roomInvitesTable, usersTable } from "@workspace/db";
 import { eq, notInArray, inArray } from "drizzle-orm";
+import { getCachedSetting } from "./settings";
 
 interface RoomUser {
   socketId: string;
@@ -12,6 +13,8 @@ interface RoomUser {
   isDJ: boolean;
   isMuted: boolean;
   isCameraOff: boolean;
+  /** True when a site-admin has globally muted this user — blocks chat */
+  isSiteMuted: boolean;
 }
 
 interface SubtitleSync {
@@ -116,6 +119,24 @@ function cancelRoomDeletion(roomState: RoomState) {
   }
 }
 
+/** Apply word filter to chat content — replaces banned words with *** */
+function applyWordFilter(content: string): string {
+  try {
+    const raw = getCachedSetting("word_filter", "[]");
+    const words: string[] = JSON.parse(raw);
+    if (!words.length) return content;
+    let result = content;
+    for (const w of words) {
+      if (!w) continue;
+      const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      result = result.replace(new RegExp(escaped, "gi"), "***");
+    }
+    return result;
+  } catch {
+    return content;
+  }
+}
+
 const rooms = new Map<string, RoomState>();
 
 let _io: Server | null = null;
@@ -144,7 +165,7 @@ export function getActiveRoomsDetailed(): { slug: string; userCount: number; isP
     slug,
     userCount: s.users.size,
     isPlaying: s.isPlaying,
-    url: s.url,
+    url: s.currentVideo,
   }));
 }
 
@@ -217,6 +238,40 @@ export function freezeRoom(slug: string, frozen: boolean): void {
   if (frozen) {
     // Kick everyone currently in the room
     _io.to(slug).emit('room-frozen');
+  }
+}
+
+/** Update in-memory creatorUserId after admin transfer-owner action */
+export function updateRoomCreator(slug: string, newCreatorUserId: number): void {
+  const roomState = rooms.get(slug);
+  if (!roomState) return;
+  // Demote old creator sockets
+  for (const user of roomState.users.values()) {
+    if (user.userId === roomState.creatorUserId && user.userId !== newCreatorUserId) {
+      user.isAdmin = false;
+      user.isDJ = false;
+    }
+    if (user.userId === newCreatorUserId) {
+      user.isAdmin = true;
+      user.isDJ = true;
+    }
+  }
+  roomState.creatorUserId = newCreatorUserId;
+  if (_io) {
+    _io.to(slug).emit('users-updated', { users: Array.from(roomState.users.values()) });
+  }
+}
+
+/** Update site-mute status for a user across all active rooms */
+export function siteMuteUser(userId: number, muted: boolean): void {
+  if (!_io) return;
+  for (const [, state] of rooms) {
+    for (const [socketId, user] of state.users) {
+      if (user.userId === userId) {
+        user.isSiteMuted = muted;
+        _io.to(socketId).emit('site-muted', { muted });
+      }
+    }
   }
 }
 
@@ -337,10 +392,27 @@ export function initSocketServer(httpServer: HttpServer): Server {
         return;
       }
 
+      // ── Enforce max room members ──────────────────────────────────────────
+      const maxMembers = parseInt(getCachedSetting("max_room_members", "100"), 10);
+      if (roomState.users.size >= maxMembers) {
+        socket.emit("room-full", { max: maxMembers });
+        return;
+      }
+
       // A user is the admin if they are the stored creator, OR if the room has no creator yet
       const isCreator = userId != null && userId === roomState.creatorUserId;
       const isFirstJoiner = roomState.users.size === 0 && !roomState.creatorUserId;
       const isAdmin = isCreator || isFirstJoiner;
+
+      // ── Check if user is site-muted ──────────────────────────────────────
+      let isSiteMuted = false;
+      if (userId) {
+        try {
+          const [dbUser] = await db.select({ isMuted: usersTable.isMuted })
+            .from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+          isSiteMuted = dbUser?.isMuted ?? false;
+        } catch {}
+      }
 
       const user: RoomUser = {
         socketId: socket.id,
@@ -351,6 +423,7 @@ export function initSocketServer(httpServer: HttpServer): Server {
         isDJ: isAdmin,
         isMuted: true,
         isCameraOff: true,
+        isSiteMuted,
       };
 
       roomState.users.set(socket.id, user);
@@ -408,6 +481,19 @@ export function initSocketServer(httpServer: HttpServer): Server {
         users: Array.from(roomState.users.values()),
         systemMessage: systemMsg,
       });
+
+      // ── Send welcome message to the joining user ─────────────────────────
+      const welcomeMsg = getCachedSetting("welcome_message", "").trim();
+      if (welcomeMsg && userId) {
+        socket.emit("chat-message", {
+          id: `welcome-${Date.now()}`,
+          username: "🔔 النظام",
+          content: welcomeMsg,
+          type: "system",
+          createdAt: new Date().toISOString(),
+          isSystem: true,
+        });
+      }
     });
 
     // ── Video sync (play / pause / seek / change-video) ─────────────────────
@@ -483,10 +569,19 @@ export function initSocketServer(httpServer: HttpServer): Server {
       if (roomState.chatDisabled && !user.isAdmin) return;
       // Guests (no userId) cannot send chat messages
       if (!user.userId) return;
+      // Site-muted users cannot chat
+      if (user.isSiteMuted && !user.isAdmin) {
+        socket.emit("chat-blocked", { reason: "muted" });
+        return;
+      }
+
+      // Apply word filter
+      const filteredContent = applyWordFilter(String(data.content || "").trim());
+      if (!filteredContent) return;
 
       const msg = {
         username: user.username,
-        content: data.content,
+        content: filteredContent,
         type: (data.type || "message") as string,
         roomId: roomState.roomId,
       };
@@ -757,9 +852,6 @@ export function initSocketServer(httpServer: HttpServer): Server {
     });
 
     // ── DJ backgrounding / closing — keep room playing ───────────────────────
-    // Client emits this when the DJ hides the PWA or closes the tab.
-    // The server then swallows the next auto-pause from that socket (within 15 s)
-    // and restores play on disconnect so the room never freezes.
     socket.on("dj-backgrounding", () => {
       if (!currentRoomSlug) return;
       const roomState = getRoomState(currentRoomSlug);
@@ -857,12 +949,9 @@ export function initSocketServer(httpServer: HttpServer): Server {
       }
 
       // Keep the room playing when a DJ/admin disconnects.
-      // A browser auto-pause (tab close, navigation) arrives within ~2s of disconnect.
-      // An intentional pause the admin did a while ago (>3s) should be respected.
       const wasDjBackgrounding = roomState.djBackgrounding?.socketId === socket.id;
       const isAdminOrDj = user?.isAdmin || user?.isDJ;
 
-      // Detect browser auto-pause: pause by this user within the last 3 seconds
       const AUTO_PAUSE_WINDOW = 3000;
       const wasAutoPaused =
         !roomState.isPlaying &&

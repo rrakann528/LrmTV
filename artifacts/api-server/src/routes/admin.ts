@@ -11,7 +11,9 @@ import { requireSiteAdmin, type AuthRequest } from "../middlewares/auth";
 import {
   broadcastSystemMessage, getActiveRoomsDetailed, getTotalActiveUsers, kickRoom, freezeRoom,
   kickUserFromAllRooms, getUserActiveRooms, forceRoomVideoState, sendRoomAnnouncement,
+  updateRoomCreator, siteMuteUser,
 } from "../lib/socket";
+import { refreshSettingsCache } from "../lib/settings";
 
 const router = Router();
 
@@ -26,6 +28,18 @@ async function setSetting(key: string, value: string): Promise<void> {
 }
 
 export { getSetting };
+
+// ── Public: site announcement (no auth required) ──────────────────────────────
+router.get("/public/site-info", async (_req, res): Promise<void> => {
+  try {
+    const rows = await db.select().from(siteSettingsTable);
+    const map = new Map(rows.map(s => [s.key, s.value]));
+    res.json({
+      announcement: map.get("announcement") ?? "",
+      maintenanceMode: map.get("maintenance_mode") === "true",
+    });
+  } catch { res.json({ announcement: "", maintenanceMode: false }); }
+});
 
 // ── Helper: send push notification ───────────────────────────────────────────
 async function sendOnePush(sub: { id: number; endpoint: string; p256dh: string; auth: string }, payload: string) {
@@ -313,6 +327,8 @@ router.put("/admin/settings", requireSiteAdmin, async (req, res): Promise<void> 
     for (const [key, value] of Object.entries(updates)) {
       if (key in DEFAULT_SETTINGS) await setSetting(key, String(value));
     }
+    // Refresh in-memory cache immediately so changes take effect without waiting 60s
+    await refreshSettingsCache();
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: "خطأ داخلي" }); }
 });
@@ -416,7 +432,10 @@ router.patch("/admin/users/:id/mute", requireSiteAdmin, async (req: AuthRequest,
   try {
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, targetId)).limit(1);
     if (!user) { res.status(404).json({ error: "المستخدم غير موجود" }); return; }
-    const [updated] = await db.update(usersTable).set({ isMuted: !user.isMuted }).where(eq(usersTable.id, targetId)).returning();
+    const newMuted = !user.isMuted;
+    const [updated] = await db.update(usersTable).set({ isMuted: newMuted }).where(eq(usersTable.id, targetId)).returning();
+    // Apply mute/unmute immediately to all active rooms
+    siteMuteUser(targetId, newMuted);
     res.json({ isMuted: updated.isMuted });
   } catch (err) { res.status(500).json({ error: "خطأ داخلي" }); }
 });
@@ -636,6 +655,7 @@ router.post("/admin/word-filter", requireSiteAdmin, async (req, res): Promise<vo
     const w = word.trim().toLowerCase();
     if (!list.includes(w)) list.push(w);
     await setSetting("word_filter", JSON.stringify(list));
+    await refreshSettingsCache();
     res.json(list);
   } catch { res.status(500).json({ error: "خطأ داخلي" }); }
 });
@@ -646,6 +666,7 @@ router.delete("/admin/word-filter/:word", requireSiteAdmin, async (req, res): Pr
     const list: string[] = JSON.parse(val);
     const filtered = list.filter(w => w !== decodeURIComponent(req.params.word));
     await setSetting("word_filter", JSON.stringify(filtered));
+    await refreshSettingsCache();
     res.json(filtered);
   } catch { res.status(500).json({ error: "خطأ داخلي" }); }
 });
@@ -719,6 +740,8 @@ router.patch("/admin/rooms/:slug/transfer-owner", requireSiteAdmin, async (req, 
     const [newOwner] = await db.select().from(usersTable).where(eq(usersTable.username, newOwnerUsername.trim())).limit(1);
     if (!newOwner) { res.status(404).json({ error: "المستخدم غير موجود" }); return; }
     await db.update(roomsTable).set({ creatorUserId: newOwner.id }).where(eq(roomsTable.slug, slug));
+    // Update in-memory room state immediately so live rooms reflect the change
+    updateRoomCreator(slug, newOwner.id);
     res.json({ ok: true, newOwnerId: newOwner.id, newOwnerUsername: newOwner.username });
   } catch (err) { res.status(500).json({ error: "خطأ داخلي" }); }
 });

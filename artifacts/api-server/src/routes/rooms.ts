@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, asc, and } from "drizzle-orm";
+import { eq, desc, asc, and, count } from "drizzle-orm";
 import { db, roomsTable, playlistItemsTable, chatMessagesTable, roomInvitesTable } from "@workspace/db";
 import { getActiveRooms, kickRoom } from "../lib/socket";
 import { requireAuth, type AuthRequest } from "../middlewares/auth";
+import { getCachedSetting } from "../lib/settings";
 import {
   CreateRoomBody,
   GetRoomParams,
@@ -43,11 +44,22 @@ router.get("/rooms", async (_req, res): Promise<void> => {
   res.json(dbRooms.map(r => ({ ...r, userCount: countMap.get(r.slug) ?? 0 })));
 });
 
-router.post("/rooms", async (req, res): Promise<void> => {
+router.post("/rooms", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const parsed = CreateRoomBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
+  }
+
+  // ── Enforce max rooms per user ────────────────────────────────────────────
+  if (req.userId) {
+    const maxRooms = parseInt(getCachedSetting("max_rooms_per_user", "10"), 10);
+    const [{ total }] = await db.select({ total: count() }).from(roomsTable)
+      .where(eq(roomsTable.creatorUserId, req.userId));
+    if (total >= maxRooms) {
+      res.status(429).json({ error: `لقد وصلت إلى الحد الأقصى من الغرف (${maxRooms} غرف)` });
+      return;
+    }
   }
 
   let room;
@@ -60,6 +72,7 @@ router.post("/rooms", async (req, res): Promise<void> => {
           slug,
           name: parsed.data.name,
           type: parsed.data.type,
+          creatorUserId: req.userId ?? null,
         })
         .returning();
       room = created;
