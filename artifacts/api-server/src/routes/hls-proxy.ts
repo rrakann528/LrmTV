@@ -149,6 +149,52 @@ router.get('/proxy/detect', async (req, res) => {
 router.options('/proxy/detect', (_req, res) => { res.set(CORS_HEADERS).sendStatus(204); });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /api/proxy/check?url=<encoded>
+//
+// Tests whether the URL is reachable from the SERVER's own IP (not the client's).
+// If the stream is IP-locked (token tied to the client IP), the server will get
+// a 403/4xx while the client can access it fine — this lets the DJ know other
+// viewers won't be able to watch.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/proxy/check', async (req, res) => {
+  res.set(CORS_HEADERS);
+  const rawUrl = req.query.url as string | undefined;
+  if (!rawUrl) { res.status(400).json({ error: 'Missing url param' }); return; }
+
+  let targetUrl: string;
+  try { targetUrl = decodeURIComponent(rawUrl); new URL(targetUrl); }
+  catch { res.status(400).json({ error: 'Invalid url' }); return; }
+
+  try {
+    // Deliberately do NOT forward X-Forwarded-For — we want to check accessibility
+    // from the server's real IP, not the client's IP.
+    const referers = candidateReferers(targetUrl);
+    let reachable = false;
+    let httpStatus = 0;
+
+    for (const referer of referers) {
+      const headers: Record<string, string> = { ...BASE_HEADERS };
+      if (referer) headers['Referer'] = referer;
+      try {
+        const response = await fetch(targetUrl, {
+          headers,
+          redirect: 'follow',
+          signal: AbortSignal.timeout(8000),
+        });
+        httpStatus = response.status;
+        if (response.ok) { reachable = true; break; }
+      } catch { httpStatus = 0; }
+    }
+
+    res.json({ reachable, httpStatus });
+  } catch (err) {
+    res.json({ reachable: false, httpStatus: 0, error: String(err) });
+  }
+});
+
+router.options('/proxy/check', (_req, res) => { res.set(CORS_HEADERS).sendStatus(204); });
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/proxy/manifest?url=<encoded>
 //
 // Fetches an HLS manifest server-side (bypasses mixed-content & CORS).
