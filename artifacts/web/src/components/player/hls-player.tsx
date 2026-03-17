@@ -880,14 +880,6 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
             </div>
           </div>
         )}
-        {/* Rebuffer spinner — small badge in corner, no dark overlay so video stays visible */}
-        {buffering && !statusMsg && !error && (
-          <div className="absolute bottom-14 end-3 z-20 pointer-events-none">
-            <div className="bg-black/50 backdrop-blur-sm rounded-full p-1.5">
-              <Loader2 className="w-3.5 h-3.5 text-white/80 animate-spin" />
-            </div>
-          </div>
-        )}
 
         {error && !statusMsg && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-20">
