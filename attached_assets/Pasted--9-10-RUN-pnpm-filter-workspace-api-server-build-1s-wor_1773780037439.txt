@@ -1,0 +1,37 @@
+[ 9/10] RUN pnpm --filter @workspace/api-server build
+1s
+> @workspace/api-server@0.0.0 build /app/artifacts/api-server
+> tsx ./build.ts
+building server...
+✘ [ERROR] No matching export in "src/lib/email.ts" for import "verifySmtp"
+    src/routes/auth.ts:7:23:
+      7 │ import { sendOtpEmail, verifySmtp } from "../lib/email";
+        ╵                        ~~~~~~~~~~
+1 error
+Error: Build failed with 1 error:
+src/routes/auth.ts:7:23: ERROR: No matching export in "src/lib/email.ts" for import "verifySmtp"
+    at failureErrorWithLog (/app/node_modules/.pnpm/esbuild@0.27.3/node_modules/esbuild/lib/main.js:1467:15)
+    at /app/node_modules/.pnpm/esbuild@0.27.3/node_modules/esbuild/lib/main.js:926:25
+    at /app/node_modules/.pnpm/esbuild@0.27.3/node_modules/esbuild/lib/main.js:878:52
+    at buildResponseToResult (/app/node_modules/.pnpm/esbuild@0.27.3/node_modules/esbuild/lib/main.js:924:7)
+    at /app/node_modules/.pnpm/esbuild@0.27.3/node_modules/esbuild/lib/main.js:951:16
+    at responseCallbacks.<computed> (/app/node_modules/.pnpm/esbuild@0.27.3/node_modules/esbuild/lib/main.js:603:9)
+    at handleIncomingPacket (/app/node_modules/.pnpm/esbuild@0.27.3/node_modules/esbuild/lib/main.js:658:12)
+    at Socket.readFromStdout (/app/node_modules/.pnpm/esbuild@0.27.3/node_modules/esbuild/lib/main.js:581:7)
+    at Socket.emit (node:events:524:28)
+    at addChunk (node:internal/streams/readable:561:12) {
+  errors: [Getter/Setter],
+  warnings: [Getter/Setter]
+}
+/app/artifacts/api-server:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/api-server@0.0.0 build: `tsx ./build.ts`
+Exit status 1
+Dockerfile:10
+-------------------
+8 |     RUN pnpm install --no-frozen-lockfile
+9 |     RUN BASE_PATH=/ pnpm --filter @workspace/web build
+10 | >>> RUN pnpm --filter @workspace/api-server build
+11 |     RUN chmod +x /app/start.sh
+12 |     EXPOSE 3000
+-------------------
+ERROR: failed to build: failed to solve: process "/bin/sh -c pnpm --filter @workspace/api-server build" did not complete successfully: exit code: 1
