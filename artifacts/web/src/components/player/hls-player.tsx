@@ -702,15 +702,15 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
         if (Hls.isSupported()) {
           const canNativeHls = video.canPlayType('application/vnd.apple.mpegurl') !== '';
           const onS1Fail = canNativeHls
-            ? () => s2_native(() => CF_PROXY ? s3_cfManifestProxy() : s5_apiProxy())
-            : () => CF_PROXY ? s3_cfManifestProxy() : s5_apiProxy();
+            ? () => s2_native(() => CF_PROXY ? s3_cfManifestProxy() : s5_cfFullProxy())
+            : () => CF_PROXY ? s3_cfManifestProxy() : s5_cfFullProxy();
           const hls = makeHls(onS1Fail);
           hlsRef.current = hls;
           hls.loadSource(src);
           hls.attachMedia(video);
         } else if (video.canPlayType('application/vnd.apple.mpegurl') !== '') {
           // Safari (iOS/macOS) without MSE: native HLS only
-          s2_native(() => CF_PROXY ? s3_cfManifestProxy() : s5_apiProxy());
+          s2_native(() => CF_PROXY ? s3_cfManifestProxy() : s5_cfFullProxy());
         } else {
           setStatusMsg(null); setError('unsupported');
         }
