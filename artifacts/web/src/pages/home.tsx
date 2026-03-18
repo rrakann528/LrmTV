@@ -22,7 +22,7 @@ const TABS: { id: Tab; label: string; Icon: typeof Tv }[] = [
 
 const HEADER_H  = 56;
 const NAV_H     = 64;
-const AD_BAR_H  = 36;
+const AD_BAR_H  = 60;
 
 export default function HomePage() {
   const [, setLocation] = useLocation();

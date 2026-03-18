@@ -47,9 +47,9 @@ export default function AdBar({ bottom = 0, inline = false }: Props) {
         background: 'rgba(10,10,20,0.95)',
         borderBottom: '1px solid rgba(255,255,255,0.06)',
         overflow: 'hidden',
-        height: 36,
+        height: 60,
       }}>
-        <div ref={ref} style={{ width: 300, height: 36 }} />
+        <div ref={ref} style={{ width: 468, height: 60 }} />
       </div>
     );
   }
@@ -66,10 +66,10 @@ export default function AdBar({ bottom = 0, inline = false }: Props) {
       justifyContent: 'center',
       background: 'rgba(10,10,20,0.95)',
       borderTop: '1px solid rgba(255,255,255,0.06)',
-      height: 36,
+      height: 60,
       overflow: 'hidden',
     }}>
-      <div ref={ref} style={{ width: 300, height: 36 }} />
+      <div ref={ref} style={{ width: 468, height: 60 }} />
     </div>
   );
 }
