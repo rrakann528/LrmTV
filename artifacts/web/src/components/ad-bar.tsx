@@ -6,7 +6,12 @@ declare global {
 
 const BANNER_ZONE_ID = '11081914';
 
-export default function AdBar({ bottom = 0 }: { bottom?: number }) {
+interface Props {
+  bottom?: number;
+  inline?: boolean;
+}
+
+export default function AdBar({ bottom = 0, inline = false }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const loaded = useRef(false);
 
@@ -32,24 +37,39 @@ export default function AdBar({ bottom = 0 }: { bottom?: number }) {
     }
   }, []);
 
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        bottom,
-        left: 0,
-        right: 0,
-        zIndex: 25,
+  if (inline) {
+    return (
+      <div style={{
+        width: '100%',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         background: 'rgba(10,10,20,0.95)',
-        borderTop: '1px solid rgba(255,255,255,0.06)',
-        minHeight: 52,
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
         overflow: 'hidden',
-      }}
-    >
-      <div ref={ref} style={{ width: 300, minHeight: 50 }} />
+        height: 36,
+      }}>
+        <div ref={ref} style={{ width: 300, height: 36 }} />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      position: 'fixed',
+      bottom,
+      left: 0,
+      right: 0,
+      zIndex: 25,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'rgba(10,10,20,0.95)',
+      borderTop: '1px solid rgba(255,255,255,0.06)',
+      height: 36,
+      overflow: 'hidden',
+    }}>
+      <div ref={ref} style={{ width: 300, height: 36 }} />
     </div>
   );
 }
