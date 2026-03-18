@@ -1,57 +1,21 @@
 /*
- * AdBanner — clean, isolated banner ad component.
+ * AdBanner — sandboxed banner ad.
  *
- * Strategy:
- *  • Runs inside a sandboxed iframe (srcdoc) with null origin.
- *  • sandbox="allow-scripts allow-popups" — scripts run, ad clicks open new tab.
- *  • NO allow-same-origin → errors from aclib never reach the parent page.
- *  • NO allow-top-navigation → impossible to hijack parent-page navigation.
- *  • Script tags inside the iframe bypass CORS, so acscdn.com loads normally.
+ * Uses src="/ad-banner.html" (same origin) so aclib can make XHR/fetch requests.
+ * sandbox excludes allow-top-navigation → iframe cannot redirect the parent page.
+ * window.open override in index.html blocks pop-under on the parent page.
  */
 
-const ZONE = '11082246';
-
-const SRCDOC = `<!DOCTYPE html>
-<html>
-<head>
-<style>
-  *,html,body{margin:0;padding:0;overflow:hidden}
-  body{display:flex;align-items:center;justify-content:center;
-       width:100%;height:60px;background:transparent}
-</style>
-</head>
-<body>
-<script>
-  /* globals aclib expects */
-  var ua=navigator.userAgent;
-  window.isIos=/iPad|iPhone|iPod/.test(ua)&&!window.MSStream;
-  window.isSafari=/^((?!chrome|android).)*safari/i.test(ua);
-  window.isAndroid=/android/i.test(ua);
-  /* suppress internal crashes */
-  window.onerror=function(){return true;};
-  window.addEventListener('unhandledrejection',function(e){e.preventDefault();});
-<\/script>
-<script src="//acscdn.com/script/aclib.js"><\/script>
-<script>
-  window.addEventListener('load',function(){
-    try{aclib.runBanner({zoneId:'${ZONE}'});}catch(e){}
-  });
-<\/script>
-</body>
-</html>`;
-
 interface Props {
-  /** fixed positioning: distance from bottom in px */
   bottom?: number;
-  /** inline mode: renders as a block element (inside sidebar etc.) */
   inline?: boolean;
 }
 
 function BannerIframe() {
   return (
     <iframe
-      srcDoc={SRCDOC}
-      sandbox="allow-scripts allow-popups"
+      src="/ad-banner.html"
+      sandbox="allow-scripts allow-popups allow-same-origin"
       scrolling="no"
       style={{ width: 468, height: 60, border: 0, display: 'block', flexShrink: 0 }}
       title="advertisement"

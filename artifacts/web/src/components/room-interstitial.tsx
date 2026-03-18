@@ -1,46 +1,17 @@
 /*
- * RoomInterstitial — full-screen ad overlay shown when entering a room.
+ * RoomInterstitial — full-screen Adcash interstitial between home and room.
  *
- * Strategy:
- *  • Custom React overlay — works 100% regardless of aclib state.
- *  • Shows two banner iframes (same null-origin sandbox as AdBanner).
- *  • 5-second countdown → skip button appears → user enters room.
- *  • Auto-navigates 3 s after countdown if user doesn't tap skip.
+ * • Loads /ad-interstitial.html (same origin) in a full-screen iframe.
+ * • Our React layer sits on TOP with a countdown + skip button (z-index higher).
+ * • After 5 s the skip button appears; after 3 more s it auto-navigates.
+ * • sandbox excludes allow-top-navigation → iframe cannot hijack parent navigation.
  */
 
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 
-const ZONE = '11082246';
 const COUNTDOWN = 5;
-
-const makeSrcdoc = (key: string) => `<!DOCTYPE html>
-<html>
-<head>
-<style>
-  *,html,body{margin:0;padding:0;overflow:hidden}
-  body{display:flex;align-items:center;justify-content:center;
-       width:100%;height:80px;background:transparent}
-</style>
-</head>
-<body>
-<script>
-  var ua=navigator.userAgent;
-  window.isIos=/iPad|iPhone|iPod/.test(ua)&&!window.MSStream;
-  window.isSafari=/^((?!chrome|android).)*safari/i.test(ua);
-  window.isAndroid=/android/i.test(ua);
-  window.onerror=function(){return true;};
-  window.addEventListener('unhandledrejection',function(e){e.preventDefault();});
-<\/script>
-<script src="//acscdn.com/script/aclib.js?r=${key}"><\/script>
-<script>
-  window.addEventListener('load',function(){
-    try{aclib.runBanner({zoneId:'${ZONE}'});}catch(e){}
-  });
-<\/script>
-</body>
-</html>`;
 
 interface Props {
   onDone: () => void;
@@ -55,6 +26,7 @@ export default function RoomInterstitial({ onDone }: Props) {
     return () => clearTimeout(t);
   }, [seconds]);
 
+  /* Auto-navigate 3 s after countdown hits 0 */
   useEffect(() => {
     if (seconds !== 0) return;
     const t = setTimeout(onDone, 3000);
@@ -62,18 +34,22 @@ export default function RoomInterstitial({ onDone }: Props) {
   }, [seconds, onDone]);
 
   return createPortal(
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-black/95"
-    >
-      {/* Header row */}
-      <div className="w-full max-w-xs flex items-center justify-between px-2 mb-5">
-        <span className="text-white/30 text-xs">إعلان</span>
+    <div className="fixed inset-0 z-[9999]">
+
+      {/* Full-screen Adcash interstitial iframe */}
+      <iframe
+        src="/ad-interstitial.html"
+        sandbox="allow-scripts allow-popups allow-same-origin"
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
+        title="ad"
+      />
+
+      {/* Countdown / skip button — above the iframe */}
+      <div className="absolute top-0 inset-x-0 z-10 flex justify-end p-4">
         {seconds > 0 ? (
-          <span className="text-white/60 text-sm font-mono bg-white/10 px-3 py-1 rounded-full">
-            تخطي خلال {seconds}ث
-          </span>
+          <div className="bg-black/75 backdrop-blur text-white text-sm px-4 py-2 rounded-full font-mono border border-white/20 select-none">
+            تخطي بعد {seconds}ث
+          </div>
         ) : (
           <AnimatePresence>
             <motion.button
@@ -81,52 +57,24 @@ export default function RoomInterstitial({ onDone }: Props) {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               onClick={onDone}
-              className="text-sm font-bold bg-primary text-primary-foreground px-4 py-1.5 rounded-full shadow-lg active:scale-95 transition-all"
+              className="bg-white text-black font-bold text-sm px-5 py-2 rounded-full shadow-xl active:scale-95 transition-all"
             >
-              تخطي ←
+              تخطي ← دخول الغرفة
             </motion.button>
           </AnimatePresence>
         )}
       </div>
 
-      {/* Two banner iframes stacked */}
-      <div className="flex flex-col gap-3 items-center">
-        {(['a', 'b'] as const).map(key => (
-          <div key={key} className="rounded-xl overflow-hidden shadow-2xl w-[320px]">
-            <iframe
-              srcDoc={makeSrcdoc(key)}
-              sandbox="allow-scripts allow-popups"
-              scrolling="no"
-              style={{ width: 320, height: 80, border: 0, display: 'block' }}
-              title={`ad-${key}`}
-            />
-          </div>
-        ))}
-      </div>
-
-      {/* Enter button (after countdown) */}
-      {seconds === 0 && (
-        <motion.button
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          onClick={onDone}
-          className="mt-8 px-8 py-3 bg-primary text-primary-foreground rounded-2xl font-bold text-base shadow-xl shadow-primary/30 active:scale-95 transition-all"
-        >
-          دخول الغرفة
-        </motion.button>
-      )}
-
       {/* Progress bar */}
-      <div className="absolute bottom-0 inset-x-0 h-1 bg-white/10">
+      <div className="absolute bottom-0 inset-x-0 z-10 h-1 bg-white/20">
         <motion.div
-          className="h-full bg-primary"
+          className="h-full bg-white"
           initial={{ width: '100%' }}
           animate={{ width: '0%' }}
           transition={{ duration: COUNTDOWN, ease: 'linear' }}
         />
       </div>
-    </motion.div>,
+    </div>,
     document.body
   );
 }
