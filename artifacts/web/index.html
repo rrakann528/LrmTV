@@ -33,7 +33,7 @@
     <!-- Instant dark background — prevents white flash before CSS is parsed -->
     <style>html,body,#root{background:#0a0a0a;margin:0;padding:0}</style>
 
-    <!-- Suppress third-party ad errors silently -->
+    <!-- Suppress third-party ad errors + block pop-under click-hijacking -->
     <script>
       window.addEventListener('unhandledrejection', function(e) {
         var msg = String(e && e.reason ? (e.reason.message || e.reason) : '');
@@ -41,8 +41,20 @@
           e.preventDefault();
         }
       });
+      /* Block pop-under: override window.open so ad libs cannot open new tabs */
+      (function() {
+        var _open = window.open.bind(window);
+        window.open = function(url, name, features) {
+          if (typeof url === 'string' && url !== '' && !url.startsWith(location.origin)) {
+            return null;
+          }
+          return _open(url, name, features);
+        };
+      })();
     </script>
 
+    <!-- Adcash library -->
+    <script id="aclib" type="text/javascript" src="//acscdn.com/script/aclib.js"></script>
   </head>
   <body>
     <div id="root"></div>
