@@ -15,17 +15,9 @@ function runAd(containerId: string) {
   const el = document.getElementById(containerId);
   if (!el || !window.aclib) return;
   try {
-    // Try passing element directly (some aclib versions support this)
-    window.aclib.runBanner({ zoneId: BANNER_ZONE_ID, el });
-  } catch {
-    try {
-      // Fallback: inject via script in document.body (aclib detects nearest container)
-      const s = document.createElement('script');
-      s.type = 'text/javascript';
-      s.text = `try{aclib.runBanner({zoneId:'${BANNER_ZONE_ID}'})}catch(e){}`;
-      document.body.appendChild(s);
-    } catch {}
-  }
+    const result = window.aclib.runBanner({ zoneId: BANNER_ZONE_ID, el });
+    if (result && typeof result.then === 'function') result.catch(() => {});
+  } catch {}
 }
 
 export default function AdBar({ bottom = 0, inline = false }: Props) {

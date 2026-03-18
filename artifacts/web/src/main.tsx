@@ -37,4 +37,12 @@ if ("serviceWorker" in navigator) {
   });
 }
 
+// Suppress unhandled rejections from third-party ad libraries (Adcash, etc.)
+window.addEventListener('unhandledrejection', (e) => {
+  const msg = e?.reason?.message || String(e?.reason || '');
+  if (msg.includes('_0x') || msg.includes('aclib') || msg.includes('acscdn')) {
+    e.preventDefault();
+  }
+});
+
 createRoot(document.getElementById("root")!).render(<App />);
