@@ -389,7 +389,7 @@ export function RoomsTab() {
                   />
 
                   <div className="flex items-center justify-between px-1 py-2">
-                    <span className="text-sm text-foreground">{(lang === 'ar') ? 'غرفة خاصة' : 'Private room'}</span>
+                    <span className="text-sm text-foreground">{t('privateRoom')}</span>
                     <Switch checked={isPrivate} onCheckedChange={setIsPrivate} />
                   </div>
 

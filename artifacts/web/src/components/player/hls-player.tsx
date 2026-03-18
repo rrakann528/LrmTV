@@ -915,7 +915,7 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
             <div className="text-center space-y-3">
               <Loader2 className="w-10 h-10 text-white/70 mx-auto animate-spin" />
               <p className="text-white/70 text-sm">
-                {statusLabel[statusMsg]?.[lang] ?? (lang === 'ar' ? 'جارٍ التحميل…' : 'Loading…')}
+                {statusLabel[statusMsg]?.[lang] ?? t('loading')}
               </p>
             </div>
           </div>
@@ -955,7 +955,7 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 active:bg-white/25 text-white text-sm font-medium transition-colors border border-white/15"
                   >
                     <RotateCcw className="w-4 h-4" />
-                    {lang === 'ar' ? 'إعادة المحاولة' : 'Retry'}
+                    {t('retry')}
                   </button>
                 </div>
               )}

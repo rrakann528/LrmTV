@@ -28,7 +28,7 @@ export default function UsersPanel({
   users, you, isAdmin, allowGuestControl, micDisabled, cameraDisabled,
   toggleDJ, kickUser, transferAdmin, requestSync, onUserClick,
 }: UsersPanelProps) {
-  const { lang } = useI18n();
+  const { t } = useI18n();
   const [adminSheetUser, setAdminSheetUser] = useState<RoomUser | null>(null);
 
   return (
@@ -42,12 +42,12 @@ export default function UsersPanel({
       <div className="flex items-center justify-between px-4 pt-3 pb-2 shrink-0">
         <span className="text-sm font-semibold text-white/80 flex items-center gap-2">
           <Users className="w-4 h-4" />
-          {lang === 'ar' ? `${users.length} في الغرفة` : `${users.length} in room`}
+          {`${users.length} ${t('inRoom')}`}
         </span>
 
         <button
           onClick={requestSync}
-          title={lang === 'ar' ? 'مزامنة الآن' : 'Sync now'}
+          title={t('syncNow')}
           className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition"
         >
           <RefreshCw className="w-4 h-4" />
@@ -67,9 +67,7 @@ export default function UsersPanel({
           {allowGuestControl
             ? <Unlock className="w-3.5 h-3.5 shrink-0" />
             : <Lock className="w-3.5 h-3.5 shrink-0" />}
-          {allowGuestControl
-            ? (lang === 'ar' ? 'الجميع يتحكم في التشغيل' : 'Everyone controls playback')
-            : (lang === 'ar' ? 'فقط المضيف والـ DJ يتحكمون' : 'Host & DJ control only')}
+          {allowGuestControl ? t('everyoneControls') : t('hostDjOnly')}
         </div>
 
         {/* Global restriction banners */}
@@ -78,13 +76,13 @@ export default function UsersPanel({
             {micDisabled && (
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs bg-red-500/10 text-red-400 border border-red-500/20">
                 <MicOff className="w-3.5 h-3.5 shrink-0" />
-                {lang === 'ar' ? 'المايكروفون معطّل لجميع المستخدمين' : 'Microphone disabled for everyone'}
+                {t('micDisabledAll')}
               </div>
             )}
             {cameraDisabled && (
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs bg-red-500/10 text-red-400 border border-red-500/20">
                 <VideoOff className="w-3.5 h-3.5 shrink-0" />
-                {lang === 'ar' ? 'الكاميرا معطّلة لجميع المستخدمين' : 'Camera disabled for everyone'}
+                {t('cameraDisabledAll')}
               </div>
             )}
           </div>
@@ -118,17 +116,14 @@ export default function UsersPanel({
                     {user.displayName || user.username}
                     {isYou && (
                       <span className="text-[10px] text-white/40 font-normal">
-                        {lang === 'ar' ? '(أنت)' : '(you)'}
+                        {t('youParens')}
                       </span>
                     )}
                     {user.isAdmin && <Crown className="w-3 h-3 text-yellow-400 shrink-0" />}
                     {user.isDJ && !user.isAdmin && <Headphones className="w-3 h-3 text-primary shrink-0" />}
                   </span>
                   <span className="text-[10px] text-white/50">
-                    {user.isAdmin
-                      ? (lang === 'ar' ? 'مضيف' : 'Host')
-                      : user.isDJ ? 'DJ'
-                      : (lang === 'ar' ? 'مشاهد' : 'Viewer')}
+                    {user.isAdmin ? t('host') : user.isDJ ? 'DJ' : t('viewer')}
                   </span>
                 </button>
               </div>
@@ -193,7 +188,7 @@ export default function UsersPanel({
                   onClick={() => { onUserClick?.(adminSheetUser.username, adminSheetUser.userId); setAdminSheetUser(null); }}
                 >
                   <UserCircle className="w-5 h-5 text-white/60 shrink-0" />
-                  <span className="text-sm">{lang === 'ar' ? 'عرض الملف الشخصي' : 'View Profile'}</span>
+                  <span className="text-sm">{t('viewProfile')}</span>
                 </button>
 
                 <button
@@ -202,9 +197,7 @@ export default function UsersPanel({
                 >
                   <Headphones className={cn('w-5 h-5 shrink-0', adminSheetUser.isDJ ? 'text-destructive' : 'text-primary')} />
                   <span className="text-sm">
-                    {adminSheetUser.isDJ
-                      ? (lang === 'ar' ? 'إلغاء صلاحية التحكم في التشغيل' : 'Revoke Playback Control')
-                      : (lang === 'ar' ? 'منح صلاحية التحكم في التشغيل' : 'Grant Playback Control')}
+                    {adminSheetUser.isDJ ? t('revokePlayback') : t('grantPlayback')}
                   </span>
                 </button>
 
@@ -214,7 +207,7 @@ export default function UsersPanel({
                     onClick={() => { transferAdmin(adminSheetUser.socketId); setAdminSheetUser(null); }}
                   >
                     <ShieldCheck className="w-5 h-5 text-yellow-400 shrink-0" />
-                    <span className="text-sm">{lang === 'ar' ? 'تحويل صلاحية المضيف' : 'Transfer Host'}</span>
+                    <span className="text-sm">{t('transferHost')}</span>
                   </button>
                 )}
 
@@ -224,7 +217,7 @@ export default function UsersPanel({
                     onClick={() => { kickUser(adminSheetUser.socketId); setAdminSheetUser(null); }}
                   >
                     <LogOut className="w-5 h-5 shrink-0" />
-                    <span className="text-sm font-medium">{lang === 'ar' ? 'طرد من الغرفة' : 'Kick from Room'}</span>
+                    <span className="text-sm font-medium">{t('kickFromRoom')}</span>
                   </button>
                 )}
               </div>

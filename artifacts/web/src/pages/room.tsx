@@ -416,7 +416,7 @@ export default function RoomPage() {
           {isAdmin && (
             <button
               onClick={() => setShowRoomSettings(s => !s)}
-              title={lang === 'ar' ? 'إعدادات الغرفة' : 'Room Settings'}
+              title={t('roomSettings')}
               className={cn(
                 'h-8 w-8 flex items-center justify-center rounded-lg border border-white/10 transition-colors',
                 showRoomSettings
@@ -433,7 +433,7 @@ export default function RoomPage() {
             <button
               onClick={handleToggleMic}
               disabled={micDisabled || isGuest}
-              title={isGuest ? (lang === 'ar' ? 'سجّل دخولك لاستخدام المايك' : 'Sign in to use mic') : micDisabled ? (lang === 'ar' ? 'المايكروفون معطّل من المضيف' : 'Mic disabled by host') : undefined}
+              title={isGuest ? t('signInToUseMic') : micDisabled ? t('micDisabledByHost') : undefined}
               className={cn('h-8 w-8 flex items-center justify-center rounded-md transition-colors',
                 (micDisabled || isGuest) ? 'opacity-40 cursor-not-allowed text-white/40'
                 : micOn ? 'bg-primary/20 text-primary' : 'text-white/70 hover:text-white hover:bg-white/10')}
@@ -443,7 +443,7 @@ export default function RoomPage() {
             <button
               onClick={handleToggleCamera}
               disabled={cameraDisabled || isGuest}
-              title={isGuest ? (lang === 'ar' ? 'سجّل دخولك لاستخدام الكاميرا' : 'Sign in to use camera') : cameraDisabled ? (lang === 'ar' ? 'الكاميرا معطّلة من المضيف' : 'Camera disabled by host') : undefined}
+              title={isGuest ? t('signInToUseCamera') : cameraDisabled ? t('cameraDisabledByHost') : undefined}
               className={cn('h-8 w-8 flex items-center justify-center rounded-md transition-colors',
                 (cameraDisabled || isGuest) ? 'opacity-40 cursor-not-allowed text-white/40'
                 : cameraOn ? 'bg-primary/20 text-primary' : 'text-white/70 hover:text-white hover:bg-white/10')}

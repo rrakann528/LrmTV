@@ -4,6 +4,7 @@ import { X, Send, Smile } from 'lucide-react';
 import EmojiPicker, { Theme } from 'emoji-picker-react';
 import { generateColorFromString, cn } from '@/lib/utils';
 import { format } from 'date-fns';
+import { useI18n } from '@/lib/i18n';
 
 interface ChatMessage {
   id: number;
@@ -30,6 +31,7 @@ export default function FullscreenChat({
   onSend,
   lang = 'en',
 }: FullscreenChatProps) {
+  const { t } = useI18n();
   const [input,     setInput]     = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
   const scrollRef  = useRef<HTMLDivElement>(null);
@@ -65,7 +67,7 @@ export default function FullscreenChat({
           {/* ── Header ── */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 shrink-0">
             <span className="text-sm font-semibold text-white">
-              {lang === 'ar' ? 'الدردشة المباشرة' : 'Live Chat'}
+              {t('liveChat')}
             </span>
             <button
               className="p-1 rounded-full hover:bg-white/10 transition text-white/60 hover:text-white"
@@ -174,7 +176,7 @@ export default function FullscreenChat({
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') handleSend(); }}
-                placeholder={lang === 'ar' ? 'اكتب رسالة...' : 'Type a message...'}
+                placeholder={t('typeMessage')}
                 className="flex-grow min-w-0 h-9 px-3 rounded-full bg-white/5 border border-white/10 text-white text-sm placeholder-white/30 outline-none focus:border-primary transition"
               />
 

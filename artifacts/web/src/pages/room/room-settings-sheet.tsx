@@ -47,7 +47,7 @@ export function RoomSettingsSheet({
   deleteRoom,
   onClose,
 }: RoomSettingsSheetProps) {
-  const { lang } = useI18n();
+  const { t } = useI18n();
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -85,7 +85,7 @@ export function RoomSettingsSheet({
           <div className="flex items-center gap-2">
             <Shield className="w-4 h-4 text-primary" />
             <h3 className="text-sm font-bold text-white">
-              {lang === 'ar' ? 'إعدادات الغرفة' : 'Room Settings'}
+              {t('roomSettings')}
             </h3>
           </div>
           <button
@@ -102,7 +102,7 @@ export function RoomSettingsSheet({
           {/* Room name */}
           {isAdmin && (
             <div className="bg-white/5 border border-white/10 rounded-xl p-3">
-              <p className="text-xs text-white/50 mb-1.5">{lang === 'ar' ? 'اسم الغرفة' : 'Room Name'}</p>
+              <p className="text-xs text-white/50 mb-1.5">{t('roomName')}</p>
               {editingName ? (
                 <div className="flex gap-2">
                   <input
@@ -146,12 +146,10 @@ export function RoomSettingsSheet({
                 : <Lock className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />}
               <div>
                 <p className="text-sm font-medium text-white">
-                  {lang === 'ar' ? 'السماح للجميع بالتحكم' : 'Allow all to control'}
+                  {t('allowAllToControl')}
                 </p>
                 <p className="text-xs text-white/50 mt-0.5 leading-relaxed">
-                  {allowGuestControl
-                    ? (lang === 'ar' ? 'يمكن لأي مستخدم تشغيل/إيقاف/تقديم الفيديو' : 'Anyone can play, pause, and seek')
-                    : (lang === 'ar' ? 'فقط المضيف والـ DJ يتحكمون' : 'Only host and DJs can control')}
+                  {allowGuestControl ? t('anyonePauseSeek') : t('hostDjControlOnly')}
                 </p>
               </div>
             </div>
@@ -166,12 +164,10 @@ export function RoomSettingsSheet({
                 : <UserX className="w-5 h-5 text-red-400 mt-0.5 shrink-0" />}
               <div>
                 <p className="text-sm font-medium text-white">
-                  {lang === 'ar' ? 'دخول الزوار' : 'Guest Entry'}
+                  {t('guestEntry')}
                 </p>
                 <p className="text-xs text-white/50 mt-0.5 leading-relaxed">
-                  {allowGuestEntry
-                    ? (lang === 'ar' ? 'يمكن للزوار (غير المسجّلين) الدخول' : 'Unregistered guests can join')
-                    : (lang === 'ar' ? 'الغرفة للمسجّلين فقط' : 'Registered users only')}
+                  {allowGuestEntry ? t('guestsCanJoin') : t('registeredOnly')}
                 </p>
               </div>
             </div>
@@ -189,12 +185,10 @@ export function RoomSettingsSheet({
                   : <Globe className="w-4 h-4 text-green-400 shrink-0" />}
                 <div>
                   <p className="text-sm font-medium text-white">
-                    {lang === 'ar' ? 'نوع الغرفة' : 'Room visibility'}
+                    {t('roomVisibility')}
                   </p>
                   <p className="text-xs text-white/50">
-                    {isPrivate
-                      ? (lang === 'ar' ? 'خاصة — لا تظهر في القائمة العامة' : 'Private — hidden from public list')
-                      : (lang === 'ar' ? 'عامة — تظهر للجميع' : 'Public — visible to everyone')}
+                    {isPrivate ? t('privateHidden') : t('publicVisible')}
                   </p>
                 </div>
               </div>
@@ -209,12 +203,10 @@ export function RoomSettingsSheet({
                   : <MessageSquare className="w-4 h-4 text-white/40 shrink-0" />}
                 <div>
                   <p className="text-sm font-medium text-white">
-                    {lang === 'ar' ? 'الدردشة' : 'Chat'}
+                    {t('chat')}
                   </p>
                   <p className="text-xs text-white/50">
-                    {chatDisabled
-                      ? (lang === 'ar' ? 'محظورة على الجميع' : 'Disabled for everyone')
-                      : (lang === 'ar' ? 'مفتوحة للجميع' : 'Open for everyone')}
+                    {chatDisabled ? t('disabledForAll') : t('openForAll')}
                   </p>
                 </div>
               </div>
@@ -229,12 +221,10 @@ export function RoomSettingsSheet({
                   : <Mic className="w-4 h-4 text-white/40 shrink-0" />}
                 <div>
                   <p className="text-sm font-medium text-white">
-                    {lang === 'ar' ? 'المايكروفون' : 'Microphone'}
+                    {t('mic')}
                   </p>
                   <p className="text-xs text-white/50">
-                    {micDisabled
-                      ? (lang === 'ar' ? 'محظور على الجميع' : 'Disabled for everyone')
-                      : (lang === 'ar' ? 'مفتوح للجميع' : 'Open for everyone')}
+                    {micDisabled ? t('disabledForAll') : t('openForAll')}
                   </p>
                 </div>
               </div>
@@ -249,12 +239,10 @@ export function RoomSettingsSheet({
                   : <Video className="w-4 h-4 text-white/40 shrink-0" />}
                 <div>
                   <p className="text-sm font-medium text-white">
-                    {lang === 'ar' ? 'الكاميرا' : 'Camera'}
+                    {t('camera')}
                   </p>
                   <p className="text-xs text-white/50">
-                    {cameraDisabled
-                      ? (lang === 'ar' ? 'محظورة على الجميع' : 'Disabled for everyone')
-                      : (lang === 'ar' ? 'مفتوحة للجميع' : 'Open for everyone')}
+                    {cameraDisabled ? t('disabledForAll') : t('openForAll')}
                   </p>
                 </div>
               </div>
@@ -278,27 +266,25 @@ export function RoomSettingsSheet({
                     <div className="flex items-center gap-2 text-red-400">
                       <AlertTriangle className="w-4 h-4 shrink-0" />
                       <p className="text-sm font-semibold">
-                        {lang === 'ar' ? 'هل أنت متأكد؟' : 'Are you sure?'}
+                        {t('areYouSure')}
                       </p>
                     </div>
                     <p className="text-xs text-white/50 leading-relaxed">
-                      {lang === 'ar'
-                        ? 'سيتم حذف الغرفة والمحادثة وقائمة التشغيل نهائياً، وسيُخرج جميع المستخدمين.'
-                        : 'The room, chat history, and playlist will be permanently deleted. All users will be removed.'}
+                      {t('deleteRoomWarning')}
                     </p>
                     <div className="flex gap-2">
                       <button
                         onClick={() => setShowDeleteConfirm(false)}
                         className="flex-1 py-2.5 rounded-xl bg-white/10 text-white text-sm font-medium hover:bg-white/15 transition"
                       >
-                        {lang === 'ar' ? 'إلغاء' : 'Cancel'}
+                        {t('cancel')}
                       </button>
                       <button
                         onClick={deleteRoom}
                         className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-sm font-bold hover:bg-red-600 transition flex items-center justify-center gap-1.5"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
-                        {lang === 'ar' ? 'حذف' : 'Delete'}
+                        {t('delete')}
                       </button>
                     </div>
                   </motion.div>
@@ -312,7 +298,7 @@ export function RoomSettingsSheet({
                     className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/15 transition text-sm font-medium"
                   >
                     <Trash2 className="w-4 h-4 shrink-0" />
-                    {lang === 'ar' ? 'حذف الغرفة نهائياً' : 'Delete Room Permanently'}
+                    {t('deleteRoomPermanently')}
                   </motion.button>
                 )}
               </AnimatePresence>

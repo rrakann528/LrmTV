@@ -435,12 +435,12 @@ export const SmartPlayer = forwardRef<SmartPlayerHandle, SmartPlayerProps>(
               <AlertTriangle className="w-12 h-12 text-amber-400 mx-auto" />
               <p className="text-white font-semibold">
                 {error === 'embed_blocked'
-                  ? (lang === 'ar' ? 'الفيديو لا يسمح بالتضمين' : 'Video cannot be embedded')
+                  ? t('videoNoEmbed')
                   : t('videoError')}
               </p>
               <p className="text-white/50 text-sm max-w-md">
                 {error === 'embed_blocked'
-                  ? (lang === 'ar' ? 'صاحب الفيديو منع تشغيله خارج يوتيوب. جرب فيديو آخر.' : 'The video owner disabled embedding. Try another video.')
+                  ? t('videoNoEmbedDesc')
                   : t('videoErrorDesc')}
               </p>
             </div>
@@ -570,7 +570,7 @@ export const SmartPlayer = forwardRef<SmartPlayerHandle, SmartPlayerProps>(
                 }}
               >
                 <VolumeX className="w-4 h-4 text-amber-400" />
-                <span>{lang === 'ar' ? 'مكتوم — اضغط لرفع الصوت' : 'Muted — tap to unmute'}</span>
+                <span>{t('mutedTapUnmute')}</span>
               </button>
             </motion.div>
           )}
@@ -654,7 +654,7 @@ export const SmartPlayer = forwardRef<SmartPlayerHandle, SmartPlayerProps>(
                       <div className="flex items-center gap-1 px-2 py-1 me-1 rounded-full bg-amber-500/20 border border-amber-400/30">
                         <Lock className="w-3 h-3 text-amber-400" />
                         <span className="text-[10px] text-amber-300 font-medium">
-                          {lang === 'ar' ? 'للمشاهدة فقط' : 'View only'}
+                          {t('viewOnly')}
                         </span>
                       </div>
                     )}

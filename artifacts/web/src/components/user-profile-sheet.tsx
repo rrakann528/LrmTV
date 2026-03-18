@@ -46,7 +46,7 @@ function stringColor(s: string) { let h = 0; for (let i = 0; i < s.length; i++) 
 
 export function UserProfileSheet({ userId, username, onClose, onChat }: Props) {
   const { user: me } = useAuth();
-  const { lang } = useI18n();
+  const { lang, t } = useI18n();
   const qc = useQueryClient();
 
   const queryKey = userId ? ['user-profile', userId] : ['user-profile-name', username];
@@ -98,6 +98,7 @@ export function UserProfileSheet({ userId, username, onClose, onChat }: Props) {
   const displayName = profile?.displayName || profile?.username || username || '';
   const avatarColor = profile?.avatarColor || stringColor(username ?? 'user');
   const joinDate    = formatJoinDate(profile?.createdAt, lang);
+  const joinedText  = joinDate ? `${t('joinedPrefix')} ${joinDate}` : '';
 
   return (
     <motion.div
@@ -127,7 +128,7 @@ export function UserProfileSheet({ userId, username, onClose, onChat }: Props) {
           {isLoading && (
             <div className="flex flex-col items-center justify-center py-20 gap-3">
               <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-              <p className="text-sm text-white/40">{lang === 'ar' ? 'جاري التحميل...' : 'Loading...'}</p>
+              <p className="text-sm text-white/40">{t('loading')}</p>
             </div>
           )}
 
@@ -139,18 +140,10 @@ export function UserProfileSheet({ userId, username, onClose, onChat }: Props) {
               </div>
               <div>
                 <p className="text-sm font-semibold text-white/70">
-                  {isNotFound
-                    ? (lang === 'ar' ? 'المستخدم غير موجود' : 'User not found')
-                    : isAuthError
-                      ? (lang === 'ar' ? 'انتهت جلستك' : 'Session expired')
-                      : (lang === 'ar' ? 'تعذّر تحميل الملف الشخصي' : 'Could not load profile')}
+                  {isNotFound ? t('userNotFound') : isAuthError ? t('sessionExpired') : t('couldNotLoadProfile')}
                 </p>
                 <p className="text-xs text-white/30 mt-1">
-                  {isNotFound
-                    ? (lang === 'ar' ? 'ربما تم حذف الحساب أو لا يوجد في هذا النظام' : 'Account may not exist in this system')
-                    : isAuthError
-                      ? (lang === 'ar' ? 'سجّل دخولك مجدداً' : 'Please log in again')
-                      : ''}
+                  {isNotFound ? t('accountNotExist') : isAuthError ? t('pleaseLogIn') : ''}
                 </p>
               </div>
             </div>
@@ -171,11 +164,11 @@ export function UserProfileSheet({ userId, username, onClose, onChat }: Props) {
                 <h2 className="text-xl font-bold text-white">{username}</h2>
                 <span className="mt-2 inline-flex items-center gap-1.5 text-xs bg-white/8 text-white/40 px-3 py-1.5 rounded-full border border-white/10">
                   <UserX className="w-3 h-3" />
-                  {lang === 'ar' ? 'مستخدم ضيف' : 'Guest User'}
+                  {t('guestUser')}
                 </span>
               </div>
               <p className="text-center text-xs text-white/30 py-6 px-6">
-                {lang === 'ar' ? 'هذا المستخدم غير مسجّل في المنصة ولا يمكن إضافته كصديق' : 'This user is not registered and cannot be added as a friend.'}
+                {t('guestUserDesc')}
               </p>
               <div className="pb-8" />
             </>
@@ -201,7 +194,7 @@ export function UserProfileSheet({ userId, username, onClose, onChat }: Props) {
 
                 {/* Name */}
                 <h2 className="text-xl font-bold text-white leading-tight">
-                  {displayName || (lang === 'ar' ? 'مستخدم' : 'User')}
+                  {displayName || t('userLabel')}
                 </h2>
 
                 {/* Username (if different from display name) */}
@@ -215,19 +208,19 @@ export function UserProfileSheet({ userId, username, onClose, onChat }: Props) {
                 {/* Status badges */}
                 {isSelf && (
                   <span className="mt-2 inline-flex items-center gap-1.5 text-xs bg-primary/15 text-primary px-3 py-1.5 rounded-full border border-primary/25 font-semibold">
-                    {lang === 'ar' ? 'أنت' : 'You'}
+                    {t('you')}
                   </span>
                 )}
                 {!isSelf && profile.friendshipStatus === 'accepted' && (
                   <span className="mt-2 inline-flex items-center gap-1.5 text-xs bg-green-500/15 text-green-400 px-3 py-1.5 rounded-full border border-green-500/20 font-semibold">
                     <UserCheck className="w-3.5 h-3.5" />
-                    {lang === 'ar' ? 'صديق' : 'Friend'}
+                    {t('friend')}
                   </span>
                 )}
                 {!isSelf && profile.friendshipStatus === 'pending_sent' && (
                   <span className="mt-2 inline-flex items-center gap-1.5 text-xs bg-white/8 text-white/50 px-3 py-1.5 rounded-full border border-white/10 font-semibold">
                     <Clock className="w-3.5 h-3.5" />
-                    {lang === 'ar' ? 'تم إرسال الطلب' : 'Request Sent'}
+                    {t('requestSent')}
                   </span>
                 )}
 
@@ -239,7 +232,7 @@ export function UserProfileSheet({ userId, username, onClose, onChat }: Props) {
                 )}
                 {!profile.bio && isSelf && (
                   <p className="mt-3 text-xs text-white/25 italic">
-                    {lang === 'ar' ? 'لم تُضف نبذة بعد' : 'No bio yet'}
+                    {t('noBioYet')}
                   </p>
                 )}
 
@@ -247,7 +240,7 @@ export function UserProfileSheet({ userId, username, onClose, onChat }: Props) {
                 {joinDate && (
                   <div className="mt-3 flex items-center gap-1.5 text-xs text-white/30">
                     <Calendar className="w-3 h-3" />
-                    <span>{lang === 'ar' ? `انضم في ${joinDate}` : `Joined ${joinDate}`}</span>
+                    <span>{joinedText}</span>
                   </div>
                 )}
               </div>
@@ -266,20 +259,20 @@ export function UserProfileSheet({ userId, username, onClose, onChat }: Props) {
                       {requestMut.isPending
                         ? <div className="w-4 h-4 border-2 border-primary-foreground/50 border-t-transparent rounded-full animate-spin" />
                         : <UserPlus className="w-4 h-4" />}
-                      {lang === 'ar' ? 'إضافة صديق' : 'Add Friend'}
+                      {t('addFriend')}
                     </button>
                   )}
 
                   {/* Accept / Decline */}
                   {profile.friendshipStatus === 'pending_received' && (
                     <>
-                      <p className="text-center text-xs text-white/40 pb-1">{lang === 'ar' ? 'أرسل لك طلب صداقة' : 'Sent you a friend request'}</p>
+                      <p className="text-center text-xs text-white/40 pb-1">{t('sentFriendReq')}</p>
                       <div className="flex gap-2">
                         <button onClick={() => respondMut.mutate('accepted')} disabled={respondMut.isPending} className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-green-500/20 text-green-400 rounded-2xl font-semibold text-sm border border-green-500/20 active:scale-[0.98] transition-transform">
-                          <Check className="w-4 h-4" />{lang === 'ar' ? 'قبول' : 'Accept'}
+                          <Check className="w-4 h-4" />{t('accept')}
                         </button>
                         <button onClick={() => respondMut.mutate('rejected')} disabled={respondMut.isPending} className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-red-500/10 text-red-400 rounded-2xl font-semibold text-sm border border-red-500/20 active:scale-[0.98] transition-transform">
-                          <X className="w-4 h-4" />{lang === 'ar' ? 'رفض' : 'Decline'}
+                          <X className="w-4 h-4" />{t('decline')}
                         </button>
                       </div>
                     </>
@@ -291,16 +284,16 @@ export function UserProfileSheet({ userId, username, onClose, onChat }: Props) {
                       {onChat && (
                         <button onClick={() => { onChat(profile); onClose(); }} className="w-full flex items-center gap-3 px-4 py-3.5 bg-primary/15 text-primary rounded-2xl font-semibold text-sm border border-primary/20 active:scale-[0.98] transition-transform">
                           <MessageCircle className="w-4 h-4" />
-                          {lang === 'ar' ? 'إرسال رسالة' : 'Send Message'}
+                          {t('sendMessage')}
                         </button>
                       )}
                       <button onClick={() => muteMut.mutate()} disabled={muteMut.isPending} className="w-full flex items-center gap-3 px-4 py-3.5 bg-white/5 text-white/80 rounded-2xl font-semibold text-sm border border-white/8 active:scale-[0.98] transition-transform">
                         {profile.muted ? <Bell className="w-4 h-4 text-green-400" /> : <BellOff className="w-4 h-4 text-amber-400" />}
-                        {profile.muted ? (lang === 'ar' ? 'إلغاء كتم الإشعارات' : 'Unmute') : (lang === 'ar' ? 'كتم الإشعارات' : 'Mute Notifications')}
+                        {profile.muted ? t('unmuteNotifs') : t('muteNotifs')}
                       </button>
                       <button onClick={() => removeMut.mutate()} disabled={removeMut.isPending} className="w-full flex items-center gap-3 px-4 py-3.5 bg-red-500/8 text-red-400 rounded-2xl font-semibold text-sm border border-red-500/15 active:scale-[0.98] transition-transform">
                         <UserMinus className="w-4 h-4" />
-                        {lang === 'ar' ? 'إزالة من الأصدقاء' : 'Remove Friend'}
+                        {t('removeFriend')}
                       </button>
                     </>
                   )}
