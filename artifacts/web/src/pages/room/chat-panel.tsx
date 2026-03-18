@@ -38,7 +38,7 @@ export default function ChatPanel({
   slug, emitChatMessage, username, liveMessages,
   chatDisabled, isAdmin, isGuest, users = [],
 }: ChatPanelProps) {
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
   const inputBlocked = (chatDisabled && !isAdmin) || isGuest;
   const { data: history } = useGetRoomMessages(slug);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -214,9 +214,7 @@ export default function ChatPanel({
             : 'bg-red-500/10 border-red-500/20 text-red-400'
         }`}>
           <MessageSquareOff className="w-3.5 h-3.5 shrink-0" />
-          {isAdmin
-            ? (lang === 'ar' ? 'الدردشة معطلة — أنت المضيف ويمكنك الكتابة' : 'Chat is disabled — you can still write as host')
-            : (lang === 'ar' ? 'الدردشة معطّلة من المضيف' : 'Chat has been disabled by the host')}
+          {isAdmin ? t('chatDisabledHostMsg') : t('chatDisabledByHostMsg')}
         </div>
       )}
 
@@ -256,9 +254,9 @@ export default function ChatPanel({
             className="ps-10 rounded-full bg-white/5 border-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
             placeholder={
               isGuest
-                ? (lang === 'ar' ? 'سجّل دخولك للمشاركة في الدردشة' : 'Sign in to chat')
+                ? t('signInToChat')
                 : inputBlocked
-                ? (lang === 'ar' ? 'الدردشة معطّلة...' : 'Chat is disabled...')
+                ? t('chatDisabledDots')
                 : t('typeMessage')
             }
           />

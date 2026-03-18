@@ -67,7 +67,7 @@ export function RoomsTab() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const qc = useQueryClient();
-  const { lang } = useI18n();
+  const { t } = useI18n();
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [roomName, setRoomName] = useState('');
@@ -152,7 +152,7 @@ export function RoomsTab() {
             exit={{ opacity: 0, y: -10 }}
             className="mx-4 mt-3 px-4 py-3 rounded-xl bg-red-500/15 border border-red-500/40 text-red-400 text-sm font-medium text-center"
           >
-            ⛔ تم طردك من الغرفة
+            {t('kickedFromRoom')}
           </motion.div>
         )}
       </AnimatePresence>
@@ -164,7 +164,7 @@ export function RoomsTab() {
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="ابحث عن غرفة..."
+            placeholder={t('searchRoomPlaceholder')}
             className="w-full bg-muted/50 border border-border rounded-xl pl-4 pr-10 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             dir="rtl"
           />
@@ -173,7 +173,7 @@ export function RoomsTab() {
           <input
             value={joinCode}
             onChange={e => setJoinCode(e.target.value)}
-            placeholder="أدخل كود الغرفة..."
+            placeholder={t('enterRoomCode')}
             className="flex-1 bg-muted/50 border border-border rounded-xl px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             dir="rtl"
             onKeyDown={e => e.key === 'Enter' && handleJoinCode()}
@@ -183,7 +183,7 @@ export function RoomsTab() {
             disabled={!joinCode.trim()}
             className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium disabled:opacity-40"
           >
-            دخول
+            {t('enterRoom')}
           </button>
         </div>
       </div>
@@ -203,7 +203,7 @@ export function RoomsTab() {
               <div className="flex items-center gap-2 pt-1">
                 <Mail className="w-4 h-4 text-primary" />
                 <span className="text-sm font-bold text-foreground">
-                  دعوات الأصدقاء ({invites.length})
+                  {t('friendInvites')} ({invites.length})
                 </span>
               </div>
 
@@ -229,7 +229,7 @@ export function RoomsTab() {
                         {inv.roomName}
                       </p>
                       <p className="text-xs text-muted-foreground truncate">
-                        دعاك <span className="text-primary font-medium">{senderName}</span> للانضمام
+                        <span className="text-primary font-medium">{senderName}</span> {t('invitedYouBy')}
                       </p>
                     </div>
 
@@ -242,7 +242,7 @@ export function RoomsTab() {
                         }}
                         disabled={declineMut.isPending}
                         className="w-8 h-8 rounded-xl bg-muted/60 flex items-center justify-center active:scale-90 transition-all"
-                        title="رفض"
+                        title={t('decline')}
                       >
                         <X className="w-4 h-4 text-muted-foreground" />
                       </button>
@@ -257,7 +257,7 @@ export function RoomsTab() {
                         className="flex items-center gap-1 px-3 h-8 rounded-xl bg-primary text-primary-foreground text-xs font-bold active:scale-90 transition-all"
                       >
                         <Check className="w-3.5 h-3.5" />
-                        دخول
+                        {t('enterRoom')}
                       </button>
                     </div>
                   </motion.div>
@@ -271,7 +271,7 @@ export function RoomsTab() {
 
         {/* ── Rooms List ── */}
         <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold text-foreground">الغرف العامة ({filtered.length})</span>
+          <span className="text-sm font-semibold text-foreground">{t('publicRooms')} ({filtered.length})</span>
         </div>
 
         {isLoading ? (
@@ -281,8 +281,8 @@ export function RoomsTab() {
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
             <Globe className="w-12 h-12 mb-3 opacity-30" />
-            <p className="text-sm">لا توجد غرف عامة حالياً</p>
-            <p className="text-xs mt-1 opacity-60">أنشئ أول غرفة!</p>
+            <p className="text-sm">{t('noPublicRooms')}</p>
+            <p className="text-xs mt-1 opacity-60">{t('createFirstRoom')}</p>
           </div>
         ) : (
           filtered.map((room, i) => (
@@ -306,7 +306,7 @@ export function RoomsTab() {
                 <p className="font-semibold text-foreground text-sm truncate">{room.name}</p>
                 <div className="flex items-center gap-1 mt-0.5">
                   <Users className="w-3 h-3 text-muted-foreground" />
-                  <span className="text-xs text-muted-foreground">{room.userCount} مشاهد</span>
+                  <span className="text-xs text-muted-foreground">{room.userCount} {t('viewers')}</span>
                 </div>
               </div>
               {bannedRooms.includes(room.slug) ? (
@@ -314,14 +314,14 @@ export function RoomsTab() {
                   disabled
                   className="flex-shrink-0 px-4 py-2 bg-red-500/20 text-red-400 border border-red-500/40 rounded-xl text-xs font-bold cursor-not-allowed"
                 >
-                  مطرود
+                  {t('banned')}
                 </button>
               ) : (
                 <button
                   onClick={() => setLocation('/room/' + room.slug)}
                   className="flex-shrink-0 px-4 py-2 bg-primary text-primary-foreground rounded-xl text-xs font-bold hover:bg-primary/90"
                 >
-                  دخول
+                  {t('enterRoom')}
                 </button>
               )}
             </motion.div>
@@ -368,7 +368,7 @@ export function RoomsTab() {
                 transition={{ type: 'spring', damping: 30, stiffness: 400 }}
               >
                 <div className="flex items-center justify-between mb-5">
-                  <h3 className="text-lg font-bold text-foreground">إنشاء غرفة جديدة</h3>
+                  <h3 className="text-lg font-bold text-foreground">{t('createNewRoom')}</h3>
                   <button onClick={() => setShowCreate(false)} className="p-2 rounded-xl hover:bg-muted/50">
                     <X className="w-5 h-5" />
                   </button>
@@ -382,7 +382,7 @@ export function RoomsTab() {
                   <input
                     value={roomName}
                     onChange={e => setRoomName(e.target.value)}
-                    placeholder="اسم الغرفة"
+                    placeholder={t('roomName')}
                     className="w-full bg-muted/50 border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                     dir="rtl"
                     autoFocus
@@ -398,7 +398,7 @@ export function RoomsTab() {
                     disabled={!roomName.trim() || createMut.isPending}
                     className="w-full py-3.5 bg-primary text-primary-foreground rounded-2xl font-bold text-base disabled:opacity-40"
                   >
-                    {createMut.isPending ? 'جاري الإنشاء...' : 'إنشاء الغرفة'}
+                    {createMut.isPending ? t('creating') : t('createRoom')}
                   </button>
                 </div>
               </motion.div>

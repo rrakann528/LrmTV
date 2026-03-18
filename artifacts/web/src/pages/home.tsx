@@ -10,25 +10,26 @@ import { ProfileTab } from './home/profile-tab';
 import { NotifBanner } from '@/components/notif-banner';
 import { useQuery } from '@tanstack/react-query';
 import { useUserSocket } from '@/hooks/use-user-socket';
-
+import { useI18n } from '@/lib/i18n';
 
 type Tab = 'rooms' | 'friends' | 'profile';
-
-const TABS: { id: Tab; label: string; Icon: typeof Tv }[] = [
-  { id: 'rooms',   label: 'الغرف',    Icon: Tv },
-  { id: 'friends', label: 'الأصدقاء', Icon: Users },
-  { id: 'profile', label: 'حسابي',    Icon: User },
-];
 
 const HEADER_H  = 56;
 const NAV_H     = 64;
 const AD_BAR_H  = 60;
 
 export default function HomePage() {
+  const { t } = useI18n();
   const [, setLocation] = useLocation();
   const search = useSearch();
   const params = new URLSearchParams(search);
   const isGuest = params.get('guest') === '1';
+
+  const TABS: { id: Tab; label: string; Icon: typeof Tv }[] = [
+    { id: 'rooms',   label: t('tabRooms'),   Icon: Tv },
+    { id: 'friends', label: t('tabFriends'), Icon: Users },
+    { id: 'profile', label: t('tabProfile'), Icon: User },
+  ];
 
   const { user, loading } = useAuth();
   const tabParam = params.get('tab') as Tab | null;
@@ -101,7 +102,7 @@ export default function HomePage() {
     );
   }
 
-  const userName = user?.displayName || user?.username || 'زائر';
+  const userName = user?.displayName || user?.username || t('guestName');
 
   return (
     <div className="bg-background" style={{ minHeight: '100dvh', minWidth: '100vw' }}>
@@ -123,7 +124,7 @@ export default function HomePage() {
             onClick={() => setLocation('/auth?mode=login')}
             className="text-xs font-semibold text-primary"
           >
-            تسجيل الدخول
+            {t('loginBtn')}
           </button>
         )}
       </div>
@@ -207,17 +208,18 @@ export default function HomePage() {
 }
 
 function GuestProfilePrompt({ onLogin }: { onLogin: () => void }) {
+  const { t } = useI18n();
   return (
     <div className="flex flex-col items-center justify-center h-full gap-4 px-6 text-center">
       <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center">
         <User className="w-10 h-10 text-muted-foreground" />
       </div>
       <div>
-        <h3 className="font-bold text-foreground text-lg mb-1">أنت زائر</h3>
-        <p className="text-muted-foreground text-sm">سجّل دخولك لإدارة ملفك الشخصي</p>
+        <h3 className="font-bold text-foreground text-lg mb-1">{t('youAreGuest')}</h3>
+        <p className="text-muted-foreground text-sm">{t('loginToManageProfile')}</p>
       </div>
       <button onClick={onLogin} className="px-8 py-3 bg-primary text-primary-foreground rounded-2xl font-bold">
-        تسجيل الدخول
+        {t('loginBtn')}
       </button>
     </div>
   );

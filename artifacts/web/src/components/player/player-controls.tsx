@@ -8,6 +8,7 @@ import {
 import { cn } from '@/lib/utils';
 import { generateColorFromString } from '@/lib/utils';
 import { enterFullscreen, exitFullscreen, isFullscreenActive, isSimulatedFullscreen, onFullscreenChange } from '@/lib/fullscreen';
+import { useI18n } from '@/lib/i18n';
 
 export interface SubtitleTrack {
   id: number;
@@ -69,6 +70,7 @@ export default function PlayerControls({
   toastMessages,
   lang = 'en',
 }: PlayerControlsProps) {
+  const { t } = useI18n();
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
@@ -241,7 +243,7 @@ export default function PlayerControls({
                     <div className="flex items-center gap-1 px-2 py-1 me-1 rounded-full bg-amber-500/20 border border-amber-400/30">
                       <Lock className="w-3 h-3 text-amber-400" />
                       <span className="text-[10px] text-amber-300 font-medium">
-                        {lang === 'ar' ? 'للمشاهدة فقط' : 'View only'}
+                        {t('viewOnly')}
                       </span>
                     </div>
                   )}
@@ -330,7 +332,7 @@ export default function PlayerControls({
                             )}
                             onClick={() => { onSubtitleChange?.(-1); setShowSubMenu(false); }}
                           >
-                            {lang === 'ar' ? 'إيقاف' : 'Off'}
+                            {t('off')}
                           </button>
 
                           {customSubtitleLabel && (
@@ -363,7 +365,7 @@ export default function PlayerControls({
                               className="w-full text-right px-3 py-1.5 rounded-lg text-sm text-white/50 hover:bg-white/10 hover:text-white transition flex items-center gap-2 justify-end"
                               onClick={() => { onSearchSubtitles?.(); setShowSubMenu(false); }}
                             >
-                              {lang === 'ar' ? 'البحث عن ترجمة' : 'Search subtitles…'}
+                              {t('searchSubtitles')}
                               <span className="text-base leading-none">🔍</span>
                             </button>
                           </div>

@@ -7,6 +7,7 @@ import { useAuth, apiFetch } from '@/hooks/use-auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { DmChat } from './dm-chat';
 import { UserProfileSheet } from '@/components/user-profile-sheet';
+import { useI18n } from '@/lib/i18n';
 
 interface FriendUser {
   id: number;
@@ -67,6 +68,7 @@ interface FriendsTabProps {
 }
 
 export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTabProps = {}) {
+  const { t } = useI18n();
   const { user } = useAuth();
   const qc = useQueryClient();
   const [subTab, setSubTab] = useState<SubTab>('friends');
@@ -188,7 +190,7 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
     return (
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3">
         <Users className="w-14 h-14 opacity-20" />
-        <p className="text-sm">سجّل دخولك لرؤية أصدقائك</p>
+        <p className="text-sm">{t('loginToSeeFriends')}</p>
       </div>
     );
   }
@@ -209,8 +211,8 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
               <Check className="w-4 h-4 text-green-400" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-green-400">تم قبول طلب الصداقة! 🎉</p>
-              <p className="text-xs text-green-300/70 truncate">{acceptedToast} قبل طلب صداقتك</p>
+              <p className="text-xs font-bold text-green-400">{t('friendAcceptedToast')}</p>
+              <p className="text-xs text-green-300/70 truncate">{acceptedToast}</p>
             </div>
             <button onClick={() => onDismissAcceptedToast?.()} className="shrink-0 text-green-400/60 hover:text-green-400">
               <X className="w-3.5 h-3.5" />
@@ -222,9 +224,9 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
       {/* Sub tabs */}
       <div className="flex gap-1 mx-4 mt-4 mb-3 bg-muted/50 rounded-2xl p-1">
         {([
-          ['friends',  'أصدقائي'],
-          ['requests', `الطلبات${pendingReceived.length > 0 ? ` (${pendingReceived.length})` : ''}`],
-          ['search',   'بحث'],
+          ['friends',  t('myFriends')],
+          ['requests', `${t('requestsTab')}${pendingReceived.length > 0 ? ` (${pendingReceived.length})` : ''}`],
+          ['search',   t('searchTab')],
         ] as [SubTab, string][]).map(([key, label]) => (
           <button
             key={key}
@@ -248,7 +250,7 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
             <input
               value={searchQ}
               onChange={e => setSearchQ(e.target.value)}
-              placeholder="ابحث باسم المستخدم..."
+              placeholder={t('searchByUsername')}
               className="w-full bg-muted/50 border border-border rounded-2xl pl-9 pr-10 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all"
               dir="rtl"
               autoFocus
@@ -279,9 +281,9 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
                 ? (
                   <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                     <Users className="w-12 h-12 mb-3 opacity-30" />
-                    <p className="text-sm">لا يوجد أصدقاء بعد</p>
+                    <p className="text-sm">{t('noFriendsYet')}</p>
                     <button onClick={() => setSubTab('search')} className="mt-3 text-primary text-xs font-semibold">
-                      ابحث عن أصدقاء
+                      {t('searchForFriends')}
                     </button>
                   </div>
                 )
@@ -305,7 +307,7 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
             {/* Refresh button */}
             <div className="flex items-center justify-between pb-1">
               <span className="text-xs text-muted-foreground/60">
-                {isFetching && !isLoading ? 'جاري التحديث...' : ''}
+                {isFetching && !isLoading ? t('updating') : ''}
               </span>
               <button
                 onClick={() => refetchFriends()}
@@ -313,7 +315,7 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
                 className="flex items-center gap-1 text-xs text-primary/70 hover:text-primary active:scale-95 transition-all disabled:opacity-40"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
-                تحديث
+                {t('refresh')}
               </button>
             </div>
 
@@ -328,7 +330,7 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
 
             {!isLoading && pendingReceived.length > 0 && (
               <>
-                <p className="text-xs font-semibold text-muted-foreground py-1">طلبات واردة</p>
+                <p className="text-xs font-semibold text-muted-foreground py-1">{t('incomingRequests')}</p>
                 {pendingReceived.map(f => (
                   <div key={f.id} className="flex items-center gap-3 bg-card border border-border rounded-2xl p-3">
                     <button onClick={() => setProfileUserId(f.id)} className="flex-shrink-0 active:scale-95 transition-transform">
@@ -343,7 +345,7 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
                         onClick={() => f.friendshipId && respondMut.mutate({ id: f.friendshipId, action: 'accepted' })}
                         disabled={respondMut.isPending}
                         className="w-9 h-9 bg-green-500/20 rounded-xl flex items-center justify-center active:scale-95 transition-transform"
-                        title="قبول"
+                        title={t('accept')}
                       >
                         <Check className="w-4 h-4 text-green-500" />
                       </button>
@@ -351,7 +353,7 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
                         onClick={() => f.friendshipId && respondMut.mutate({ id: f.friendshipId, action: 'rejected' })}
                         disabled={respondMut.isPending}
                         className="w-9 h-9 bg-destructive/10 rounded-xl flex items-center justify-center active:scale-95 transition-transform"
-                        title="رفض"
+                        title={t('decline')}
                       >
                         <X className="w-4 h-4 text-destructive" />
                       </button>
@@ -362,7 +364,7 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
             )}
             {pendingSent.length > 0 && (
               <>
-                <p className="text-xs font-semibold text-muted-foreground py-1 mt-2">طلبات مرسلة</p>
+                <p className="text-xs font-semibold text-muted-foreground py-1 mt-2">{t('sentRequests')}</p>
                 {pendingSent.map(f => (
                   <div key={f.id} className="flex items-center gap-3 bg-card border border-border rounded-2xl p-3">
                     <button onClick={() => setProfileUserId(f.id)} className="flex-shrink-0">
@@ -375,13 +377,13 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
                     <div className="flex items-center gap-2 shrink-0">
                       <span className="flex items-center gap-1 text-xs text-muted-foreground bg-muted px-2 py-1 rounded-lg">
                         <Clock className="w-3 h-3" />
-                        انتظار
+                        {t('waiting')}
                       </span>
                       <button
                         onClick={() => f.friendshipId && cancelRequestMut.mutate(f.friendshipId)}
                         disabled={cancelRequestMut.isPending}
                         className="w-7 h-7 bg-destructive/10 rounded-lg flex items-center justify-center active:scale-95 transition-transform"
-                        title="إلغاء الطلب"
+                        title={t('cancelRequest')}
                       >
                         <X className="w-3.5 h-3.5 text-destructive" />
                       </button>
@@ -395,14 +397,13 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
                 <Bell className="w-12 h-12 mb-3 opacity-30" />
                 {friendsError ? (
                   <>
-                    <p className="text-sm text-destructive/70">تعذّر الاتصال بالخادم</p>
+                    <p className="text-sm text-destructive/70">{t('serverConnectError')}</p>
                     <p className="text-xs text-muted-foreground/50 mt-0.5 font-mono">{(friendsFetchError as Error)?.message || 'err'}</p>
-                    <button onClick={() => refetchFriends()} className="text-xs text-primary mt-2 underline">أعد المحاولة</button>
+                    <button onClick={() => refetchFriends()} className="text-xs text-primary mt-2 underline">{t('retry')}</button>
                   </>
                 ) : (
                   <>
-                    <p className="text-sm">لا توجد طلبات</p>
-                    <p className="text-xs text-muted-foreground/40 mt-1">يتحدث كل 5 ثوانٍ تلقائياً</p>
+                    <p className="text-sm">{t('noRequestsYet')}</p>
                   </>
                 )}
               </div>
@@ -439,8 +440,8 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
                 <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center mb-3">
                   <Search className="w-7 h-7 opacity-30" />
                 </div>
-                <p className="text-sm font-medium">لا توجد نتائج</p>
-                <p className="text-xs text-muted-foreground/60 mt-1">جرّب اسماً مختلفاً</p>
+                <p className="text-sm font-medium">{t('noSearchResults')}</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">{t('tryDiffName')}</p>
               </div>
             )}
 
@@ -486,19 +487,19 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
                             ? <div className="w-3.5 h-3.5 border-2 border-primary-foreground/50 border-t-transparent rounded-full animate-spin" />
                             : <UserPlus className="w-3.5 h-3.5" />
                           }
-                          إضافة
+                          {t('addUser')}
                         </button>
                       )}
                       {status === 'pending_sent' && (
                         <span className="flex items-center gap-1.5 px-3 py-2 bg-muted text-muted-foreground rounded-xl text-xs font-medium shrink-0">
                           <Clock className="w-3.5 h-3.5" />
-                          في الانتظار
+                          {t('pendingUser')}
                         </span>
                       )}
                       {status === 'accepted' && (
                         <span className="flex items-center gap-1.5 px-3 py-2 bg-green-500/10 text-green-500 rounded-xl text-xs font-bold shrink-0">
                           <Check className="w-3.5 h-3.5" />
-                          صديق
+                          {t('friend')}
                         </span>
                       )}
                       {status === 'pending_received' && (
@@ -507,7 +508,7 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
                             onClick={() => friendshipId && respondMut.mutate({ id: friendshipId, action: 'accepted' })}
                             disabled={respondMut.isPending}
                             className="w-8 h-8 bg-green-500/15 rounded-xl flex items-center justify-center active:scale-95 transition-all"
-                            title="قبول"
+                            title={t('accept')}
                           >
                             <Check className="w-4 h-4 text-green-500" />
                           </button>
@@ -515,7 +516,7 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
                             onClick={() => friendshipId && respondMut.mutate({ id: friendshipId, action: 'rejected' })}
                             disabled={respondMut.isPending}
                             className="w-8 h-8 bg-destructive/10 rounded-xl flex items-center justify-center active:scale-95 transition-all"
-                            title="رفض"
+                            title={t('decline')}
                           >
                             <X className="w-4 h-4 text-destructive" />
                           </button>
@@ -524,7 +525,7 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
                     </>
                   )}
                   {isSelf && (
-                    <span className="px-3 py-2 bg-primary/10 text-primary rounded-xl text-xs font-bold shrink-0">أنت</span>
+                    <span className="px-3 py-2 bg-primary/10 text-primary rounded-xl text-xs font-bold shrink-0">{t('you')}</span>
                   )}
                 </div>
               );
@@ -535,8 +536,8 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
                 <div className="w-20 h-20 rounded-full bg-muted/50 flex items-center justify-center mb-4">
                   <Search className="w-9 h-9 opacity-25" />
                 </div>
-                <p className="text-sm font-medium">ابحث عن أصدقاء</p>
-                <p className="text-xs text-muted-foreground/60 mt-1">اكتب اسم المستخدم للبحث</p>
+                <p className="text-sm font-medium">{t('searchForFriends')}</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">{t('searchPrompt')}</p>
               </div>
             )}
           </>
@@ -604,7 +605,7 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
                   className="w-full flex items-center gap-4 px-5 py-4 text-foreground hover:bg-muted/50 transition-colors"
                 >
                   <Users className="w-5 h-5 text-primary" />
-                  <span className="text-sm font-medium">عرض الملف الشخصي</span>
+                  <span className="text-sm font-medium">{t('viewProfile')}</span>
                 </button>
 
                 <div className="h-px bg-border mx-4" />
@@ -620,10 +621,10 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
                     : <BellOff className="w-5 h-5 text-amber-400" />
                   }
                   <span className="text-sm font-medium">
-                    {menuFriend.muted ? 'إلغاء الكتم' : 'كتم الإشعارات'}
+                    {menuFriend.muted ? t('unmuteNotifs') : t('muteNotifs')}
                   </span>
                   {menuFriend.muted && (
-                    <span className="mr-auto text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full">مكتوم</span>
+                    <span className="mr-auto text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full">{t('muted')}</span>
                   )}
                 </button>
 
@@ -636,7 +637,7 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
                   className="w-full flex items-center gap-4 px-5 py-4 text-destructive hover:bg-destructive/10 transition-colors"
                 >
                   <UserMinus className="w-5 h-5" />
-                  <span className="text-sm font-medium">إزالة صديق</span>
+                  <span className="text-sm font-medium">{t('removeFriend')}</span>
                 </button>
               </div>
 
@@ -646,7 +647,7 @@ export function FriendsTab({ acceptedToast, onDismissAcceptedToast }: FriendsTab
                   onClick={() => setMenuFriend(null)}
                   className="w-full py-3 bg-muted/50 rounded-2xl text-sm font-semibold text-foreground"
                 >
-                  إلغاء
+                  {t('cancel')}
                 </button>
               </div>
             </motion.div>
@@ -672,6 +673,7 @@ function FriendCard({
   onMenu: () => void;
   onProfile: () => void;
 }) {
+  const { t } = useI18n();
   const name = friend.displayName || friend.username;
   const unread = conv?.unreadCount ?? 0;
   const lastMsg = conv?.lastMessage ?? null;
@@ -692,7 +694,7 @@ function FriendCard({
         </div>
         {lastMsg ? (
           <p className="text-xs text-muted-foreground truncate">
-            {lastMsg.fromMe ? 'أنت: ' : ''}{lastMsg.content}
+            {lastMsg.fromMe ? t('fromMe') : ''}{lastMsg.content}
           </p>
         ) : (
           <p className="text-xs text-muted-foreground">@{friend.username}</p>
