@@ -692,10 +692,46 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
           video.addEventListener('error',          onErrWrapped,  { once: true });
         };
 
+        // S7 — API proxy with native <video> (for iOS Safari where HLS.js is not supported)
+        // Loads the manifest through our server proxy which rewrites ALL segment URLs
+        // to go through /api/proxy/segment — fixing CORS / Referer issues on iOS.
+        const s7_nativeApiProxy = () => {
+          if (cancelled) return;
+          destroyAll();
+          const proxyUrl = `/api/proxy/manifest?url=${encodeURIComponent(src)}`;
+          setStatusMsg('hls-proxy');
+          video.removeAttribute('crossorigin');
+          video.removeAttribute('referrerpolicy');
+          video.removeAttribute('src');
+          video.load();
+          video.src = proxyUrl;
+          video.load();
+          let done = false;
+          const onMeta = () => {
+            if (done || cancelled) return; done = true; clearTimeout(nTimer);
+            const live = !isFinite(video.duration) || video.duration === Infinity;
+            isLiveRef.current = live; setIsLive(live);
+            onDurationChange(); setStatusMsg(null); setError(null); startStallWatchdog(); signalReady();
+          };
+          const onErr = () => {
+            if (done || cancelled) return; done = true; clearTimeout(nTimer);
+            setError('ip-locked'); setStatusMsg(null);
+          };
+          const nTimer = setTimeout(() => {
+            if (done) return; done = true;
+            video.removeEventListener('loadedmetadata', onMeta);
+            video.removeEventListener('error', onErr);
+            if (!cancelled) { setError('ip-locked'); setStatusMsg(null); }
+          }, 20_000);
+          video.addEventListener('loadedmetadata', onMeta, { once: true });
+          video.addEventListener('error',          onErr,  { once: true });
+        };
+
         // S6 — API server proxy (always available; fetches manifest server-side, rewrites segments)
-        // This is the universal last resort that works even without CF_PROXY configured.
+        // On iOS Safari (no HLS.js), delegates to S7 which uses native <video>.
         const s6_apiProxy = () => {
           if (cancelled) return;
+          if (!Hls.isSupported()) { s7_nativeApiProxy(); return; }
           const proxyUrl = `/api/proxy/manifest?url=${encodeURIComponent(src)}`;
           setStatusMsg('hls-proxy');
           const hls = makeHls(() => { setError('ip-locked'); setStatusMsg(null); });
@@ -761,8 +797,12 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
           hls.loadSource(src);
           hls.attachMedia(video);
         } else if (video.canPlayType('application/vnd.apple.mpegurl') !== '') {
-          // Safari (iOS/macOS) without MSE: native HLS only
-          s2_native(() => CF_PROXY ? s3_cfManifestProxy() : s6_apiProxy());
+          // Safari (iOS/macOS) without MSE — native HLS only.
+          // Use API proxy first: all segment URLs are rewritten through our server which
+          // adds CORS headers, handles Referer auth, and fixes the common black-screen
+          // (segments loading silently after manifest parses fine on iOS Safari).
+          // Fall back to direct native if the proxy manifest itself can't be fetched.
+          s7_nativeApiProxy();
         } else {
           setStatusMsg(null); setError('unsupported');
         }
@@ -993,7 +1033,6 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
           ref={videoRef}
           style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
           playsInline
-          referrerPolicy="no-referrer"
           onPlay={() => { setAutoplayBlocked(false); setError(null); onPlay?.(); }}
           onPause={onPause}
           onSeeked={() => {
