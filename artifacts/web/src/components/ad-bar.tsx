@@ -4,7 +4,7 @@ declare global {
   interface Window { aclib?: any; }
 }
 
-const BANNER_ZONE_ID = '11081914';
+const BANNER_ZONE_ID = '11082246';
 
 interface Props {
   bottom?: number;
