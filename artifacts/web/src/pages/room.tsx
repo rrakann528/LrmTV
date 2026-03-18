@@ -88,9 +88,6 @@ export default function RoomPage() {
   // pause events from resetting all viewers' playback position.
   const suppressPauseRef = useRef(false);
 
-  // IP-lock detection: shown to DJ only when the server can't reach the stream
-  const [ipLockWarning, setIpLockWarning] = useState(false);
-
   // Room settings panel (admin only) — controlled from header button
   const [showRoomSettings, setShowRoomSettings] = useState(false);
 
@@ -140,23 +137,6 @@ export default function RoomPage() {
     };
   }, [isDJ, socket]);
 
-  // IP-lock check: when the DJ changes the URL (HLS/m3u8), ask the server to
-  // try fetching it from its own IP. If the server can't reach it → IP-locked.
-  useEffect(() => {
-    const url = syncState.url;
-    if (!isDJ || !url) { setIpLockWarning(false); return; }
-    const lower = url.toLowerCase();
-    const isHls = lower.includes('m3u8') || lower.includes('hls') || lower.includes('.ts');
-    if (!isHls) { setIpLockWarning(false); return; }
-
-    setIpLockWarning(false);
-    const ctrl = new AbortController();
-    fetch(`/api/proxy/check?url=${encodeURIComponent(url)}`, { signal: ctrl.signal })
-      .then(r => r.json())
-      .then((data: { reachable: boolean }) => { if (!ctrl.signal.aborted) setIpLockWarning(!data.reachable); })
-      .catch(() => {});
-    return () => ctrl.abort();
-  }, [syncState.url, isDJ]);
 
   const queryClient = useQueryClient();
   const addMutation = useAddPlaylistItem();
@@ -500,17 +480,6 @@ export default function RoomPage() {
                   externalSubtitle={subtitleSync}
                 />
                 </div>
-                {/* IP-lock warning — shown to DJ only when server can't reach the stream */}
-                {ipLockWarning && isDJ && (
-                  <div className="absolute top-2 left-2 right-2 z-40 flex items-start gap-2 bg-red-900/90 border border-red-500/70 text-red-100 text-sm rounded-xl px-3 py-2 backdrop-blur-sm shadow-lg">
-                    <span className="text-base mt-0.5">🔒</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-bold text-red-200">البث مقيد بالشبكة</p>
-                      <p className="text-red-300 text-xs leading-snug">هذا الرابط مرتبط بعنوان IP الخاص بك — المشاهدون الآخرون لن يتمكنوا من المشاهدة. استخدم رابطاً غير مقيد.</p>
-                    </div>
-                    <button onClick={() => setIpLockWarning(false)} className="text-red-400 hover:text-red-200 transition-colors text-lg leading-none mt-0.5">×</button>
-                  </div>
-                )}
 
                 {/* "Click to Watch" overlay — shown before watching or after ad */}
                 {(needsClickToWatch || (!watcherReady && syncState.url)) && (
