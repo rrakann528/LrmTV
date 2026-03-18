@@ -406,12 +406,14 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
         maxBufferLength:    30,
         maxMaxBufferLength: 60,
 
-        // ── Retry / timeout — generous for slow CDNs ─────────────────────────
-        manifestLoadingMaxRetry:   3,
-        manifestLoadingTimeOut:    10_000,
-        manifestLoadingRetryDelay: 1000,
-        levelLoadingMaxRetry:      4,
-        levelLoadingTimeOut:       15_000,
+        // ── Retry / timeout ───────────────────────────────────────────────────
+        // Manifest: fail fast (1 retry, 6 s) so we reach S6 API proxy quickly.
+        // Fragments: more retries — once playing we want recovery not restart.
+        manifestLoadingMaxRetry:   1,
+        manifestLoadingTimeOut:    6_000,
+        manifestLoadingRetryDelay: 800,
+        levelLoadingMaxRetry:      3,
+        levelLoadingTimeOut:       12_000,
         levelLoadingRetryDelay:    1000,
         fragLoadingMaxRetry:       6,
         fragLoadingTimeOut:        20_000,

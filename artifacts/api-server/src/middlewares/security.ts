@@ -52,7 +52,9 @@ export const generalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "طلبات كثيرة جداً، انتظر قليلاً" },
-  skip: (req) => req.path.startsWith("/auth/me"),
+  skip: (req) =>
+    req.path.startsWith("/auth/me") ||
+    req.path.startsWith("/proxy/"), // HLS segments/manifests are high-frequency — skip rate limit
 });
 
 // ── Strict Auth Rate Limit (login / register) ─────────────────────────────────
