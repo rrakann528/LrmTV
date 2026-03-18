@@ -202,13 +202,17 @@ export default function RoomPage() {
   const syncPlayingRef = useRef(syncState.playing);
   useEffect(() => { syncPlayingRef.current = syncState.playing; }, [syncState.playing]);
 
+  // Keep a ref of isDJ so the URL-change effect can read it without adding it to deps.
+  const isDJRef = useRef(isDJ);
+  useEffect(() => { isDJRef.current = isDJ; }, [isDJ]);
+
   // Reset player state whenever the video URL changes.
+  // DJs see the pre-roll automatically; non-DJs see "Click to Watch" first.
   useEffect(() => {
     setPlayerReady(false);
     readyTimeRef.current = 0;
     setWatcherReadyState(false);
-    if (syncState.url) setShowPreRoll(true);
-    else setShowPreRoll(false);
+    setShowPreRoll(syncState.url ? isDJRef.current : false);
   }, [syncState.url]);
 
   // Sync effect — thresholds by source:
