@@ -27,7 +27,7 @@ import FriendsPanel from './room/friends-panel';
 import { RoomSettingsSheet } from './room/room-settings-sheet';
 import { UserProfileSheet } from '@/components/user-profile-sheet';
 import { SmartPlayer, type SmartPlayerHandle } from '@/components/player/smart-player';
-import AdBar from '@/components/ad-bar';
+
 import PreRollAd from '@/components/pre-roll-ad';
 import YoutubeSearch from '@/components/youtube-search';
 
@@ -563,8 +563,6 @@ export default function RoomPage() {
 
           </div>
 
-          {/* Inline banner ad below player */}
-          <AdBar inline />
 
           {/* Local cam — draggable, bottom-left, audio muted to avoid echo */}
           {localStream && localStream.getVideoTracks().length > 0 && (
