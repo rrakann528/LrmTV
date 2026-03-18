@@ -78,6 +78,7 @@ export default function RoomPage() {
   const [isSeeking]             = useState(false);
   const [playerReady, setPlayerReady] = useState(false);
   const [showPreRoll, setShowPreRoll] = useState(false);
+  const [needsClickToWatch, setNeedsClickToWatch] = useState(false);
 
   // "Click to Watch" gate — non-DJs must click before the player activates.
   // DJs are always ready (computed: isDJ || watcherReadyState) so they
@@ -213,6 +214,7 @@ export default function RoomPage() {
     readyTimeRef.current = 0;
     setWatcherReadyState(false);
     setShowPreRoll(syncState.url ? isDJRef.current : false);
+    setNeedsClickToWatch(false);
   }, [syncState.url]);
 
   // Sync effect — thresholds by source:
@@ -480,7 +482,7 @@ export default function RoomPage() {
                 <SmartPlayer
                   ref={playerRef}
                   url={syncState.url}
-                  playing={syncState.playing && watcherReady && !showPreRoll}
+                  playing={syncState.playing && watcherReady && !showPreRoll && !needsClickToWatch}
                   controls={canControl && watcherReady}
                   canControl={canControl && watcherReady}
                   initialTime={syncState.time}
@@ -503,11 +505,7 @@ export default function RoomPage() {
                 {showPreRoll && (
                   <PreRollAd onDone={() => {
                     setShowPreRoll(false);
-                    setWatcherReadyState(true);
-                    // Give the player a frame to become visible then seek to current sync position
-                    setTimeout(() => {
-                      playerRef.current?.seekTo(syncState.time);
-                    }, 300);
+                    setNeedsClickToWatch(true);
                   }} />
                 )}
                 {/* IP-lock warning — shown to DJ only when server can't reach the stream */}
@@ -522,11 +520,19 @@ export default function RoomPage() {
                   </div>
                 )}
 
-                {/* "Click to Watch" overlay — shown to non-DJs joining a live session */}
-                {!watcherReady && !showPreRoll && syncState.url && (
+                {/* "Click to Watch" overlay — shown before watching or after ad */}
+                {(needsClickToWatch || (!watcherReady && !showPreRoll && syncState.url)) && (
                   <div
                     className="absolute inset-0 z-30 flex items-center justify-center bg-black/75 cursor-pointer select-none"
-                    onClick={() => { setShowPreRoll(true); }}
+                    onClick={() => {
+                      if (needsClickToWatch) {
+                        setNeedsClickToWatch(false);
+                        setWatcherReadyState(true);
+                        setTimeout(() => { playerRef.current?.seekTo(syncState.time); }, 300);
+                      } else {
+                        setShowPreRoll(true);
+                      }
+                    }}
                   >
                     <div className="text-center space-y-4">
                       <div className="w-24 h-24 rounded-full bg-white/15 backdrop-blur-md flex items-center justify-center mx-auto border-2 border-white/30 hover:bg-white/25 transition-colors">
