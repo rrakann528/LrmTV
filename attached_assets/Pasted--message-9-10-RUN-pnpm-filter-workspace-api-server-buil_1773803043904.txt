@@ -1,0 +1,31 @@
+{
+  "message": "[ 9/10] RUN pnpm --filter @workspace/api-server build",
+  "timestamp": "2026-03-18T03:02:57.273710740Z",
+  "severity": "error",
+  "children": [
+    {
+      "message": "\n> @workspace/api-server@0.0.0 build /app/artifacts/api-server\n> tsx ./build.ts\n\n",
+      "timestamp": "2026-03-18T03:03:20.155041877Z"
+    },
+    {
+      "message": "building server...\n",
+      "timestamp": "2026-03-18T03:03:20.503613778Z"
+    },
+    {
+      "message": "✘ [ERROR] Could not resolve \"@sendgrid/mail\"\n\n    src/lib/email.ts:1:19:\n      1 │ import sgMail from '@sendgrid/mail';\n        ╵                    ~~~~~~~~~~~~~~~~\n\n  You can mark the path \"@sendgrid/mail\" as external to exclude it from the bundle, which will remove this error and leave the unresolved path in the bundle.\n\n",
+      "timestamp": "2026-03-18T03:03:20.645359119Z"
+    },
+    {
+      "message": "1 error\n",
+      "timestamp": "2026-03-18T03:03:20.722456074Z"
+    },
+    {
+      "message": "Error: Build failed with 1 error:\nsrc/lib/email.ts:1:19: ERROR: Could not resolve \"@sendgrid/mail\"\n    at failureErrorWithLog (/app/node_modules/.pnpm/esbuild@0.27.3/node_modules/esbuild/lib/main.js:1467:15)\n    at /app/node_modules/.pnpm/esbuild@0.27.3/node_modules/esbuild/lib/main.js:926:25\n    at /app/node_modules/.pnpm/esbuild@0.27.3/node_modules/esbuild/lib/main.js:878:52\n    at buildResponseToResult (/app/node_modules/.pnpm/esbuild@0.27.3/node_modules/esbuild/lib/main.js:924:7)\n    at /app/node_modules/.pnpm/esbuild@0.27.3/node_modules/esbuild/lib/main.js:951:16\n    at responseCallbacks.<computed> (/app/node_modules/.pnpm/esbuild@0.27.3/node_modules/esbuild/lib/main.js:603:9)\n    at handleIncomingPacket (/app/node_modules/.pnpm/esbuild@0.27.3/node_modules/esbuild/lib/main.js:658:12)\n    at Socket.readFromStdout (/app/node_modules/.pnpm/esbuild@0.27.3/node_modules/esbuild/lib/main.js:581:7)\n    at Socket.emit (node:events:524:28)\n    at addChunk (node:internal/streams/readable:561:12) {\n  errors: [Getter/Setter],\n  warnings: [Getter/Setter]\n}\n",
+      "timestamp": "2026-03-18T03:03:20.72617755Z"
+    },
+    {
+      "message": "/app/artifacts/api-server:\n ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/api-server@0.0.0 build: `tsx ./build.ts`\nExit status 1\n",
+      "timestamp": "2026-03-18T03:03:20.754097784Z"
+    }
+  ]
+}

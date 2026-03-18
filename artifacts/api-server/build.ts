@@ -32,6 +32,7 @@ const allowlist = [
   "passport",
   "passport-local",
   "pg",
+  "@sendgrid/mail",
   "resend",
   "stripe",
   "uuid",
