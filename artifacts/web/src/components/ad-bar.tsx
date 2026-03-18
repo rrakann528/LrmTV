@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useId } from 'react';
 
 declare global {
   interface Window { aclib?: any; }
@@ -12,17 +12,13 @@ interface Props {
 }
 
 export default function AdBar({ bottom = 0, inline = false }: Props) {
-  const ref = useRef<HTMLDivElement>(null);
-  const loaded = useRef(false);
+  const uid = useId().replace(/:/g, '');
+  const containerId = `adbar-${uid}`;
 
   useEffect(() => {
-    if (loaded.current) return;
-
-    const inject = () => {
-      const el = ref.current;
-      if (!el || typeof el.appendChild !== 'function') return;
-      if (loaded.current) return;
-      loaded.current = true;
+    const run = () => {
+      const el = document.getElementById(containerId);
+      if (!el) return;
       try {
         const script = document.createElement('script');
         script.type = 'text/javascript';
@@ -32,14 +28,15 @@ export default function AdBar({ bottom = 0, inline = false }: Props) {
     };
 
     if (window.aclib) {
-      inject();
+      setTimeout(run, 0);
     } else {
       const t = setInterval(() => {
-        if (window.aclib) { clearInterval(t); inject(); }
+        if (window.aclib) { clearInterval(t); setTimeout(run, 0); }
       }, 300);
       return () => clearInterval(t);
     }
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [containerId]);
 
   if (inline) {
     return (
@@ -53,7 +50,7 @@ export default function AdBar({ bottom = 0, inline = false }: Props) {
         overflow: 'hidden',
         height: 60,
       }}>
-        <div ref={ref} style={{ width: 468, height: 60 }} />
+        <div id={containerId} style={{ width: 468, height: 60 }} />
       </div>
     );
   }
@@ -73,7 +70,7 @@ export default function AdBar({ bottom = 0, inline = false }: Props) {
       height: 60,
       overflow: 'hidden',
     }}>
-      <div ref={ref} style={{ width: 468, height: 60 }} />
+      <div id={containerId} style={{ width: 468, height: 60 }} />
     </div>
   );
 }
