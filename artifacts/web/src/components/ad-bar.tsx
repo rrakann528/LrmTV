@@ -11,32 +11,38 @@ interface Props {
   inline?: boolean;
 }
 
+function runAd(containerId: string) {
+  const el = document.getElementById(containerId);
+  if (!el || !window.aclib) return;
+  try {
+    // Try passing element directly (some aclib versions support this)
+    window.aclib.runBanner({ zoneId: BANNER_ZONE_ID, el });
+  } catch {
+    try {
+      // Fallback: inject via script in document.body (aclib detects nearest container)
+      const s = document.createElement('script');
+      s.type = 'text/javascript';
+      s.text = `try{aclib.runBanner({zoneId:'${BANNER_ZONE_ID}'})}catch(e){}`;
+      document.body.appendChild(s);
+    } catch {}
+  }
+}
+
 export default function AdBar({ bottom = 0, inline = false }: Props) {
-  const uid = useId().replace(/:/g, '');
+  const uid = useId().replace(/[^a-z0-9]/gi, '');
   const containerId = `adbar-${uid}`;
 
   useEffect(() => {
-    const run = () => {
-      const el = document.getElementById(containerId);
-      if (!el) return;
-      try {
-        const script = document.createElement('script');
-        script.type = 'text/javascript';
-        script.text = `aclib.runBanner({ zoneId: '${BANNER_ZONE_ID}' });`;
-        el.appendChild(script);
-      } catch {}
-    };
-
     if (window.aclib) {
-      setTimeout(run, 0);
+      setTimeout(() => runAd(containerId), 0);
     } else {
       const t = setInterval(() => {
-        if (window.aclib) { clearInterval(t); setTimeout(run, 0); }
+        if (window.aclib) { clearInterval(t); setTimeout(() => runAd(containerId), 0); }
       }, 300);
       return () => clearInterval(t);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [containerId]);
+  }, []);
 
   if (inline) {
     return (
