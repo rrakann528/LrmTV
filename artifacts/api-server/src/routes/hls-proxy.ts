@@ -85,24 +85,59 @@ async function fetchWithRefererFallback(
   return { response: last, referer: '' };
 }
 
+/** Build a proxy URL for any resource URI found in an M3U8 line */
+function proxyUri(uri: string, baseDir: string, referer: string): string {
+  const absolute = uri.startsWith('http') ? uri : new URL(uri, baseDir).href;
+  let p = `/api/proxy/segment?url=${encodeURIComponent(absolute)}`;
+  if (referer) p += `&referer=${encodeURIComponent(referer)}`;
+  return p;
+}
+
 /**
- * Rewrite every non-comment line of an M3U8 manifest so that:
- *  - relative URIs become absolute (resolved against baseDir)
- *  - all URIs are tunnelled through /api/proxy/segment
- *  - the working referer is forwarded so segments use the same auth
+ * Rewrite an M3U8 manifest so that ALL resource URIs are tunnelled through
+ * our server proxy.  This includes:
+ *   • segment lines (non-comment, non-empty)
+ *   • #EXT-X-KEY  URI="…"   — AES-128 / SAMPLE-AES decryption keys
+ *   • #EXT-X-MAP  URI="…"   — fMP4 initialisation segment
+ *   • #EXT-X-MEDIA URI="…"  — alternate rendition playlists
+ *
+ * Without rewriting the key URI, AES-128-encrypted streams load the manifest
+ * fine (correct duration) but the browser cannot fetch the decryption key
+ * due to CORS / IP-lock restrictions → black screen.
  */
 function rewriteManifest(text: string, baseDir: string, referer: string): string {
   return text.split('\n').map(line => {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) return line;
+    if (!trimmed) return line;
 
-    const absolute = trimmed.startsWith('http')
-      ? trimmed
-      : new URL(trimmed, baseDir).href;
+    // ── Segment line (non-tag) ────────────────────────────────────────────────
+    if (!trimmed.startsWith('#')) {
+      return proxyUri(trimmed, baseDir, referer);
+    }
 
-    let seg = `/api/proxy/segment?url=${encodeURIComponent(absolute)}`;
-    if (referer) seg += `&referer=${encodeURIComponent(referer)}`;
-    return seg;
+    // ── #EXT-X-KEY  URI="…" ──────────────────────────────────────────────────
+    if (trimmed.startsWith('#EXT-X-KEY')) {
+      return line.replace(/URI="([^"]+)"/, (_match, uri) =>
+        `URI="${proxyUri(uri, baseDir, referer)}"`,
+      );
+    }
+
+    // ── #EXT-X-MAP  URI="…" ──────────────────────────────────────────────────
+    if (trimmed.startsWith('#EXT-X-MAP')) {
+      return line.replace(/URI="([^"]+)"/, (_match, uri) =>
+        `URI="${proxyUri(uri, baseDir, referer)}"`,
+      );
+    }
+
+    // ── #EXT-X-MEDIA  URI="…" (alternate audio/subtitle renditions) ──────────
+    if (trimmed.startsWith('#EXT-X-MEDIA') && trimmed.includes('URI=')) {
+      return line.replace(/URI="([^"]+)"/, (_match, uri) =>
+        `URI="${proxyUri(uri, baseDir, referer)}"`,
+      );
+    }
+
+    // All other tags pass through unchanged
+    return line;
   }).join('\n');
 }
 
