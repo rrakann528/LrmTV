@@ -8,7 +8,18 @@ const BANNER_ZONE_ID = '11082246';
  * while the script loads. Once the script is loaded we restore the original and
  * call runBanner — the ad renders normally but the hijack handler was never set.
  */
+function ensureGlobals() {
+  const ua = navigator.userAgent;
+  if ((window as any).isIos === undefined)
+    (window as any).isIos = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
+  if ((window as any).isSafari === undefined)
+    (window as any).isSafari = /^((?!chrome|android).)*safari/i.test(ua);
+  if ((window as any).isAndroid === undefined)
+    (window as any).isAndroid = /android/i.test(ua);
+}
+
 function loadBanner(container: HTMLDivElement) {
+  ensureGlobals();
   const orig = EventTarget.prototype.addEventListener;
 
   // Block document/window click handlers that aclib would register

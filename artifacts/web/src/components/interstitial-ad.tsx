@@ -5,7 +5,18 @@ import { createPortal } from 'react-dom';
 const ZONE_ID = '11083266';
 const COUNTDOWN = 5;
 
+function ensureGlobals() {
+  const ua = navigator.userAgent;
+  if ((window as any).isIos === undefined)
+    (window as any).isIos = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
+  if ((window as any).isSafari === undefined)
+    (window as any).isSafari = /^((?!chrome|android).)*safari/i.test(ua);
+  if ((window as any).isAndroid === undefined)
+    (window as any).isAndroid = /android/i.test(ua);
+}
+
 function loadAclibAndRunInterstitial() {
+  ensureGlobals();
   const run = () => {
     try { (window as any).aclib.runInterstitial({ zoneId: ZONE_ID }); } catch (_) {}
   };
