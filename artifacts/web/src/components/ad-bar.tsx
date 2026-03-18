@@ -1,62 +1,51 @@
 import { useEffect, useRef } from 'react';
 
-declare global {
-  interface Window { aclib?: any; }
-}
-
 const BANNER_ZONE_ID = '11082246';
+
+const AD_HTML = `<!DOCTYPE html><html><head><style>*{margin:0;padding:0;overflow:hidden}body{width:468px;height:60px;background:transparent}</style></head><body><script src="//acscdn.com/script/aclib.js"><\/script><script>window.onload=function(){try{aclib.runBanner({zoneId:'${BANNER_ZONE_ID}'});}catch(e){}}<\/script></body></html>`;
 
 interface Props {
   bottom?: number;
   inline?: boolean;
 }
 
-function injectAd(container: HTMLDivElement) {
-  const run = () => {
-    if (!window.aclib) return false;
-    // inject a real <script> node inside the container so aclib renders into it
-    const s = document.createElement('script');
-    s.type = 'text/javascript';
-    s.text = `try { aclib.runBanner({ zoneId: '${BANNER_ZONE_ID}' }); } catch(e) {}`;
-    container.appendChild(s);
-    return true;
-  };
-  if (!run()) {
-    const t = setInterval(() => { if (run()) clearInterval(t); }, 300);
-    return () => clearInterval(t);
-  }
-}
-
-export default function AdBar({ bottom = 0, inline = false }: Props) {
-  const ref = useRef<HTMLDivElement>(null);
-
+function AdIframe() {
+  const ref = useRef<HTMLIFrameElement>(null);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const cleanup = injectAd(el);
-    return cleanup;
+    const doc = el.contentDocument || el.contentWindow?.document;
+    if (doc) {
+      doc.open();
+      doc.write(AD_HTML);
+      doc.close();
+    }
   }, []);
-
-  const inner = (
-    <div
+  return (
+    <iframe
       ref={ref}
-      style={{ width: 468, height: 60, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      scrolling="no"
+      style={{ width: 468, height: 60, border: 0, display: 'block', flexShrink: 0 }}
+      title="ad"
     />
   );
+}
 
+export default function AdBar({ bottom = 0, inline = false }: Props) {
   if (inline) {
     return (
       <div style={{
         width: '100%',
+        height: 60,
+        flexShrink: 0,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         background: 'rgba(10,10,20,0.95)',
         borderBottom: '1px solid rgba(255,255,255,0.06)',
         overflow: 'hidden',
-        height: 60,
       }}>
-        {inner}
+        <AdIframe />
       </div>
     );
   }
@@ -68,15 +57,16 @@ export default function AdBar({ bottom = 0, inline = false }: Props) {
       left: 0,
       right: 0,
       zIndex: 25,
+      height: 60,
+      flexShrink: 0,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       background: 'rgba(10,10,20,0.95)',
       borderTop: '1px solid rgba(255,255,255,0.06)',
-      height: 60,
       overflow: 'hidden',
     }}>
-      {inner}
+      <AdIframe />
     </div>
   );
 }
