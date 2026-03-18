@@ -4,7 +4,7 @@ import { Edit3, LogOut, Save, X, Bell, BellOff, Shield } from 'lucide-react';
 import { Avatar } from '@/components/avatar';
 import { useAuth } from '@/hooks/use-auth';
 import { usePush } from '@/hooks/use-push';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, LANGUAGES } from '@/lib/i18n';
 import { useLocation } from 'wouter';
 import {
   AVATARS, AVATAR_CATEGORIES, CATEGORY_LABELS,
@@ -21,7 +21,7 @@ type Section = null | 'name' | 'username' | 'bio' | 'avatar' | 'password';
 
 export function ProfileTab() {
   const { user, logout, updateProfile } = useAuth();
-  const { lang } = useI18n();
+  const { lang, setLang } = useI18n();
   const [, setLocation] = useLocation();
   const { permission, loading: pushLoading, subscribe, refresh: refreshPush, test: testPush, isSupported } = usePush(user?.id);
   const [testMsg, setTestMsg] = useState<'idle' | 'sent' | 'fail'>('idle');
@@ -313,6 +313,29 @@ export function ProfileTab() {
             {lang === 'ar' ? 'لوحة الأدمن' : 'Admin Panel'}
           </motion.button>
         )}
+
+        {/* ── Language selector ───────────────────────────── */}
+        <div className="mt-4 bg-card border border-border rounded-2xl overflow-hidden">
+          <p className="text-xs text-muted-foreground px-4 pt-3 pb-2">
+            {lang === 'ar' ? 'لغة الواجهة' : 'Interface Language'}
+          </p>
+          <div className="grid grid-cols-3 gap-1.5 px-3 pb-3">
+            {LANGUAGES.map(l => (
+              <button
+                key={l.code}
+                onClick={() => setLang(l.code)}
+                className={`flex flex-col items-center gap-1 py-2.5 rounded-xl text-xs font-medium transition-all active:scale-95 ${
+                  lang === l.code
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+                }`}
+              >
+                <span className="text-xl leading-none">{l.flag}</span>
+                <span>{l.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* Logout */}
         <motion.button

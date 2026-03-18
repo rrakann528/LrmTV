@@ -1,10 +1,18 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
-type Language = 'en' | 'ar';
+export type Language = 'ar' | 'en' | 'fr' | 'tr' | 'es' | 'id';
+
+export const LANGUAGES: { code: Language; label: string; flag: string; dir: 'rtl' | 'ltr' }[] = [
+  { code: 'ar', label: 'العربية',    flag: '🇸🇦', dir: 'rtl' },
+  { code: 'en', label: 'English',    flag: '🇺🇸', dir: 'ltr' },
+  { code: 'fr', label: 'Français',   flag: '🇫🇷', dir: 'ltr' },
+  { code: 'tr', label: 'Türkçe',     flag: '🇹🇷', dir: 'ltr' },
+  { code: 'es', label: 'Español',    flag: '🇪🇸', dir: 'ltr' },
+  { code: 'id', label: 'Indonesia',  flag: '🇮🇩', dir: 'ltr' },
+];
 
 const translations = {
   en: {
-    // Landing
     tagline: "Watch together, miles apart.",
     description: "Create a room, invite friends, and watch videos in perfect sync. Chat, react, and call in real-time.",
     createRoom: "Create Room",
@@ -16,8 +24,6 @@ const translations = {
     roomCode: "Room Code / Slug",
     startWatching: "Start Watching",
     join: "Join",
-    
-    // Room
     chat: "Live Chat",
     playlist: "Playlist",
     users: "Users",
@@ -38,22 +44,16 @@ const translations = {
     nothingPlaying: "Nothing is playing. Add a video to the playlist!",
     copyLink: "Copy Link",
     copied: "Copied!",
-    
-    // System Messages
     joinedRoom: "joined the room",
     leftRoom: "left the room",
     becameDJ: "is now a DJ",
     lostDJ: "is no longer a DJ",
     playerLocked: "The player has been locked by an admin",
     playerUnlocked: "The player has been unlocked",
-    
-    // Backgrounds
     changeBackground: "Change Lounge",
     bgNeonCity: "Neon City",
     bgHomeTheater: "Home Theater",
     bgVoid: "The Void",
-
-    // Extra UI
     multiSource: "Multi-source",
     perfectSync: "Perfect Sync",
     admin: "Admin",
@@ -73,10 +73,9 @@ const translations = {
     videoErrorProxyRequired: "Stream requires routing",
     videoErrorProxyRequiredDesc: "This stream can't be played directly. You can load it through our free proxy — it may be slightly slower.",
     videoErrorProxyBtn: "Load via proxy",
-    tapToPlay: "Tap to play"
+    tapToPlay: "Tap to play",
   },
   ar: {
-    // Landing
     tagline: "شاهدوا معاً، مهما بعدت المسافات.",
     description: "أنشئ غرفة، ادعُ أصدقاءك، وشاهدوا مقاطع الفيديو بتزامن مثالي. دردش، تفاعل، واتصل في الوقت الفعلي.",
     createRoom: "إنشاء غرفة",
@@ -88,8 +87,6 @@ const translations = {
     roomCode: "رمز الغرفة",
     startWatching: "ابدأ المشاهدة",
     join: "انضمام",
-    
-    // Room
     chat: "الدردشة",
     playlist: "قائمة التشغيل",
     users: "المستخدمون",
@@ -110,22 +107,16 @@ const translations = {
     nothingPlaying: "لا يوجد شيء يعرض. أضف فيديو للقائمة!",
     copyLink: "نسخ الرابط",
     copied: "تم النسخ!",
-    
-    // System Messages
     joinedRoom: "انضم للغرفة",
     leftRoom: "غادر الغرفة",
     becameDJ: "أصبح الآن DJ",
     lostDJ: "فقد صلاحية DJ",
     playerLocked: "تم قفل المشغل من قبل المشرف",
     playerUnlocked: "تم فتح المشغل",
-    
-    // Backgrounds
     changeBackground: "تغيير الخلفية",
     bgNeonCity: "مدينة النيون",
     bgHomeTheater: "مسرح منزلي",
     bgVoid: "الفراغ",
-
-    // Extra UI
     multiSource: "متعدد المصادر",
     perfectSync: "مزامنة مثالية",
     admin: "مشرف",
@@ -145,8 +136,260 @@ const translations = {
     videoErrorProxyRequired: "البث يحتاج توجيهاً",
     videoErrorProxyRequiredDesc: "لا يمكن تشغيل هذا البث مباشرةً. يمكنك تحميله عبر الـ proxy المجاني — قد يكون أبطأ قليلاً.",
     videoErrorProxyBtn: "تحميل عبر الـ proxy",
-    tapToPlay: "اضغط للتشغيل"
-  }
+    tapToPlay: "اضغط للتشغيل",
+  },
+  fr: {
+    tagline: "Regarder ensemble, à des kilomètres.",
+    description: "Créez une salle, invitez vos amis et regardez des vidéos en parfaite synchronisation. Discutez, réagissez et appelez en temps réel.",
+    createRoom: "Créer une salle",
+    joinRoom: "Rejoindre une salle",
+    roomName: "Nom de la salle",
+    username: "Votre pseudo",
+    public: "Public",
+    private: "Privé",
+    roomCode: "Code de la salle",
+    startWatching: "Commencer à regarder",
+    join: "Rejoindre",
+    chat: "Chat en direct",
+    playlist: "Playlist",
+    users: "Utilisateurs",
+    friends: "Amis",
+    typeMessage: "Tapez un message...",
+    addVideo: "Ajouter une URL vidéo",
+    videoUrl: "YouTube, Twitch, Vimeo, MP4...",
+    addToQueue: "Ajouter à la file",
+    lockPlayer: "Verrouiller le lecteur",
+    unlockPlayer: "Déverrouiller le lecteur",
+    grantDJ: "Accorder DJ",
+    revokeDJ: "Révoquer DJ",
+    mic: "Microphone",
+    camera: "Caméra",
+    leave: "Quitter la salle",
+    viewers: "spectateurs",
+    nowPlaying: "En cours",
+    nothingPlaying: "Rien ne joue. Ajoutez une vidéo à la playlist!",
+    copyLink: "Copier le lien",
+    copied: "Copié!",
+    joinedRoom: "a rejoint la salle",
+    leftRoom: "a quitté la salle",
+    becameDJ: "est maintenant DJ",
+    lostDJ: "n'est plus DJ",
+    playerLocked: "Le lecteur a été verrouillé par un admin",
+    playerUnlocked: "Le lecteur a été déverrouillé",
+    changeBackground: "Changer le fond",
+    bgNeonCity: "Ville Néon",
+    bgHomeTheater: "Cinéma Maison",
+    bgVoid: "Le Vide",
+    multiSource: "Multi-source",
+    perfectSync: "Synchronisation parfaite",
+    admin: "Admin",
+    adminControls: "Panneau d'administration",
+    djOnly: "Seuls les DJs peuvent contrôler la lecture",
+    backToUsers: "Retour aux utilisateurs",
+    viewer: "Spectateur",
+    loading: "Chargement...",
+    roomNotFound: "Salle introuvable",
+    you: "Vous",
+    enterNickname: "Entrez votre pseudo",
+    yourNickname: "Votre pseudo",
+    videoError: "Impossible de lire cette vidéo",
+    videoErrorDesc: "L'URL de la vidéo peut être invalide ou le format n'est pas supporté.",
+    videoErrorIpLocked: "Le flux est restreint",
+    videoErrorIpLockedDesc: "Ce flux n'autorise la lecture que depuis le réseau d'origine. Essayez d'ouvrir le lien directement.",
+    videoErrorProxyRequired: "Le flux nécessite un routage",
+    videoErrorProxyRequiredDesc: "Ce flux ne peut pas être lu directement. Vous pouvez le charger via notre proxy gratuit.",
+    videoErrorProxyBtn: "Charger via proxy",
+    tapToPlay: "Appuyez pour lire",
+  },
+  tr: {
+    tagline: "Birlikte izleyin, mesafe önemli değil.",
+    description: "Bir oda oluşturun, arkadaşlarınızı davet edin ve videoları mükemmel senkronla izleyin. Sohbet edin, tepki verin ve gerçek zamanlı arayın.",
+    createRoom: "Oda Oluştur",
+    joinRoom: "Odaya Katıl",
+    roomName: "Oda Adı",
+    username: "Takma Adınız",
+    public: "Herkese Açık",
+    private: "Özel",
+    roomCode: "Oda Kodu",
+    startWatching: "İzlemeye Başla",
+    join: "Katıl",
+    chat: "Canlı Sohbet",
+    playlist: "Oynatma Listesi",
+    users: "Kullanıcılar",
+    friends: "Arkadaşlar",
+    typeMessage: "Mesaj yazın...",
+    addVideo: "Video URL'si Ekle",
+    videoUrl: "YouTube, Twitch, Vimeo, MP4...",
+    addToQueue: "Kuyruğa Ekle",
+    lockPlayer: "Oynatıcıyı Kilitle",
+    unlockPlayer: "Oynatıcının Kilidini Aç",
+    grantDJ: "DJ Ver",
+    revokeDJ: "DJ İptal Et",
+    mic: "Mikrofon",
+    camera: "Kamera",
+    leave: "Odadan Çık",
+    viewers: "izleyici",
+    nowPlaying: "Şimdi Oynatılıyor",
+    nothingPlaying: "Hiçbir şey oynatılmıyor. Oynatma listesine video ekleyin!",
+    copyLink: "Bağlantıyı Kopyala",
+    copied: "Kopyalandı!",
+    joinedRoom: "odaya katıldı",
+    leftRoom: "odadan ayrıldı",
+    becameDJ: "artık DJ",
+    lostDJ: "artık DJ değil",
+    playerLocked: "Oynatıcı bir yönetici tarafından kilitlendi",
+    playerUnlocked: "Oynatıcının kilidi açıldı",
+    changeBackground: "Arka Planı Değiştir",
+    bgNeonCity: "Neon Şehir",
+    bgHomeTheater: "Ev Sineması",
+    bgVoid: "Boşluk",
+    multiSource: "Çoklu Kaynak",
+    perfectSync: "Mükemmel Senkronizasyon",
+    admin: "Yönetici",
+    adminControls: "Yönetici Paneli",
+    djOnly: "Yalnızca DJ'ler oynatmayı kontrol edebilir",
+    backToUsers: "Kullanıcılara Dön",
+    viewer: "İzleyici",
+    loading: "Yükleniyor...",
+    roomNotFound: "Oda bulunamadı",
+    you: "Sen",
+    enterNickname: "Takma adınızı girin",
+    yourNickname: "Takma Adınız",
+    videoError: "Bu video oynatılamıyor",
+    videoErrorDesc: "Video URL'si geçersiz olabilir veya format desteklenmiyor.",
+    videoErrorIpLocked: "Akış erişim kısıtlı",
+    videoErrorIpLockedDesc: "Bu akış yalnızca açıldığı ağdan izin veriyor. Bağlantıyı doğrudan tarayıcınızda açmayı deneyin.",
+    videoErrorProxyRequired: "Akış yönlendirme gerektiriyor",
+    videoErrorProxyRequiredDesc: "Bu akış doğrudan oynatılamıyor. Ücretsiz proxy'miz aracılığıyla yükleyebilirsiniz.",
+    videoErrorProxyBtn: "Proxy ile Yükle",
+    tapToPlay: "Oynatmak için dokunun",
+  },
+  es: {
+    tagline: "Mira juntos, sin importar la distancia.",
+    description: "Crea una sala, invita a tus amigos y mira videos en perfecta sincronía. Chatea, reacciona y llama en tiempo real.",
+    createRoom: "Crear sala",
+    joinRoom: "Unirse a la sala",
+    roomName: "Nombre de la sala",
+    username: "Tu apodo",
+    public: "Público",
+    private: "Privado",
+    roomCode: "Código de sala",
+    startWatching: "Empezar a ver",
+    join: "Unirse",
+    chat: "Chat en vivo",
+    playlist: "Lista de reproducción",
+    users: "Usuarios",
+    friends: "Amigos",
+    typeMessage: "Escribe un mensaje...",
+    addVideo: "Agregar URL de video",
+    videoUrl: "YouTube, Twitch, Vimeo, MP4...",
+    addToQueue: "Agregar a la cola",
+    lockPlayer: "Bloquear reproductor",
+    unlockPlayer: "Desbloquear reproductor",
+    grantDJ: "Otorgar DJ",
+    revokeDJ: "Revocar DJ",
+    mic: "Micrófono",
+    camera: "Cámara",
+    leave: "Salir de la sala",
+    viewers: "espectadores",
+    nowPlaying: "Reproduciendo ahora",
+    nothingPlaying: "Nada está reproduciendo. ¡Agrega un video a la lista!",
+    copyLink: "Copiar enlace",
+    copied: "¡Copiado!",
+    joinedRoom: "se unió a la sala",
+    leftRoom: "salió de la sala",
+    becameDJ: "ahora es DJ",
+    lostDJ: "ya no es DJ",
+    playerLocked: "El reproductor ha sido bloqueado por un administrador",
+    playerUnlocked: "El reproductor ha sido desbloqueado",
+    changeBackground: "Cambiar fondo",
+    bgNeonCity: "Ciudad Neón",
+    bgHomeTheater: "Cine en casa",
+    bgVoid: "El Vacío",
+    multiSource: "Multi-fuente",
+    perfectSync: "Sincronización perfecta",
+    admin: "Administrador",
+    adminControls: "Panel de administración",
+    djOnly: "Solo los DJs pueden controlar la reproducción",
+    backToUsers: "Volver a usuarios",
+    viewer: "Espectador",
+    loading: "Cargando...",
+    roomNotFound: "Sala no encontrada",
+    you: "Tú",
+    enterNickname: "Introduce tu apodo",
+    yourNickname: "Tu apodo",
+    videoError: "No se puede reproducir este video",
+    videoErrorDesc: "La URL del video puede ser inválida o el formato no es compatible.",
+    videoErrorIpLocked: "El stream está restringido",
+    videoErrorIpLockedDesc: "Este stream solo permite reproducción desde la red original. Intenta abrir el enlace directamente.",
+    videoErrorProxyRequired: "El stream requiere enrutamiento",
+    videoErrorProxyRequiredDesc: "Este stream no se puede reproducir directamente. Puedes cargarlo a través de nuestro proxy gratuito.",
+    videoErrorProxyBtn: "Cargar mediante proxy",
+    tapToPlay: "Toca para reproducir",
+  },
+  id: {
+    tagline: "Nonton bareng, walau berjauhan.",
+    description: "Buat ruangan, undang teman, dan nonton video secara sinkron. Chat, bereaksi, dan telepon secara real-time.",
+    createRoom: "Buat Ruangan",
+    joinRoom: "Gabung Ruangan",
+    roomName: "Nama Ruangan",
+    username: "Nama Panggilan",
+    public: "Publik",
+    private: "Privat",
+    roomCode: "Kode Ruangan",
+    startWatching: "Mulai Nonton",
+    join: "Gabung",
+    chat: "Chat Langsung",
+    playlist: "Daftar Putar",
+    users: "Pengguna",
+    friends: "Teman",
+    typeMessage: "Tulis pesan...",
+    addVideo: "Tambah URL Video",
+    videoUrl: "YouTube, Twitch, Vimeo, MP4...",
+    addToQueue: "Tambah ke Antrian",
+    lockPlayer: "Kunci Pemutar",
+    unlockPlayer: "Buka Kunci Pemutar",
+    grantDJ: "Beri DJ",
+    revokeDJ: "Cabut DJ",
+    mic: "Mikrofon",
+    camera: "Kamera",
+    leave: "Keluar Ruangan",
+    viewers: "penonton",
+    nowPlaying: "Sedang Diputar",
+    nothingPlaying: "Belum ada yang diputar. Tambah video ke daftar putar!",
+    copyLink: "Salin Tautan",
+    copied: "Disalin!",
+    joinedRoom: "bergabung ke ruangan",
+    leftRoom: "keluar dari ruangan",
+    becameDJ: "sekarang DJ",
+    lostDJ: "bukan DJ lagi",
+    playerLocked: "Pemutar telah dikunci oleh admin",
+    playerUnlocked: "Pemutar telah dibuka kuncinya",
+    changeBackground: "Ganti Latar",
+    bgNeonCity: "Kota Neon",
+    bgHomeTheater: "Bioskop Rumah",
+    bgVoid: "Kekosongan",
+    multiSource: "Multi-sumber",
+    perfectSync: "Sinkronisasi Sempurna",
+    admin: "Admin",
+    adminControls: "Panel Admin",
+    djOnly: "Hanya DJ yang bisa mengontrol pemutaran",
+    backToUsers: "Kembali ke Pengguna",
+    viewer: "Penonton",
+    loading: "Memuat...",
+    roomNotFound: "Ruangan tidak ditemukan",
+    you: "Kamu",
+    enterNickname: "Masukkan nama panggilan",
+    yourNickname: "Nama Panggilan",
+    videoError: "Tidak bisa memutar video ini",
+    videoErrorDesc: "URL video mungkin tidak valid atau format tidak didukung.",
+    videoErrorIpLocked: "Stream dibatasi akses",
+    videoErrorIpLockedDesc: "Stream ini hanya mengizinkan pemutaran dari jaringan asal. Coba buka tautan langsung di browser.",
+    videoErrorProxyRequired: "Stream membutuhkan routing",
+    videoErrorProxyRequiredDesc: "Stream ini tidak bisa diputar langsung. Kamu bisa memuatnya melalui proxy gratis kami.",
+    videoErrorProxyBtn: "Muat via proxy",
+    tapToPlay: "Ketuk untuk memutar",
+  },
 };
 
 type Translations = typeof translations.en;
@@ -156,26 +399,47 @@ interface I18nContextType {
   lang: Language;
   setLang: (lang: Language) => void;
   t: (key: TranslationKey) => string;
+  dir: 'rtl' | 'ltr';
 }
 
 const I18nContext = createContext<I18nContextType | null>(null);
 
+const LS_KEY = 'lrmtv_lang';
+
 function detectDefaultLanguage(): Language {
-  const deviceLang = navigator.language || (navigator as any).userLanguage || '';
-  return deviceLang.toLowerCase().startsWith('ar') ? 'ar' : 'en';
+  const saved = localStorage.getItem(LS_KEY) as Language | null;
+  if (saved && translations[saved]) return saved;
+  const deviceLang = (navigator.language || '').toLowerCase();
+  if (deviceLang.startsWith('ar')) return 'ar';
+  if (deviceLang.startsWith('fr')) return 'fr';
+  if (deviceLang.startsWith('tr')) return 'tr';
+  if (deviceLang.startsWith('es')) return 'es';
+  if (deviceLang.startsWith('id')) return 'id';
+  return 'en';
 }
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
   const [lang, setLangState] = useState<Language>(detectDefaultLanguage);
 
   const setLang = (newLang: Language) => {
+    localStorage.setItem(LS_KEY, newLang);
     setLangState(newLang);
+    const langMeta = LANGUAGES.find(l => l.code === newLang);
+    document.documentElement.dir = langMeta?.dir ?? 'ltr';
+    document.documentElement.lang = newLang;
   };
 
-  const t = (key: TranslationKey) => translations[lang][key];
+  useEffect(() => {
+    const langMeta = LANGUAGES.find(l => l.code === lang);
+    document.documentElement.dir = langMeta?.dir ?? 'ltr';
+    document.documentElement.lang = lang;
+  }, []);
+
+  const t = (key: TranslationKey): string => translations[lang][key] ?? translations.en[key];
+  const dir = LANGUAGES.find(l => l.code === lang)?.dir ?? 'ltr';
 
   return (
-    <I18nContext.Provider value={{ lang, setLang, t }}>
+    <I18nContext.Provider value={{ lang, setLang, t, dir }}>
       {children}
     </I18nContext.Provider>
   );
