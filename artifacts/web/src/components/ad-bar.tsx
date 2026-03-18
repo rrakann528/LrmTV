@@ -16,15 +16,19 @@ export default function AdBar({ bottom = 0, inline = false }: Props) {
   const loaded = useRef(false);
 
   useEffect(() => {
-    if (loaded.current || !ref.current) return;
-    loaded.current = true;
+    if (loaded.current) return;
 
     const inject = () => {
-      if (!ref.current) return;
-      const script = document.createElement('script');
-      script.type = 'text/javascript';
-      script.text = `aclib.runBanner({ zoneId: '${BANNER_ZONE_ID}' });`;
-      ref.current.appendChild(script);
+      const el = ref.current;
+      if (!el || typeof el.appendChild !== 'function') return;
+      if (loaded.current) return;
+      loaded.current = true;
+      try {
+        const script = document.createElement('script');
+        script.type = 'text/javascript';
+        script.text = `aclib.runBanner({ zoneId: '${BANNER_ZONE_ID}' });`;
+        el.appendChild(script);
+      } catch {}
     };
 
     if (window.aclib) {
