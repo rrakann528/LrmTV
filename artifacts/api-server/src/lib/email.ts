@@ -1,27 +1,23 @@
-import { Resend } from "resend";
+import sgMail from '@sendgrid/mail';
 
-// Lazy init — avoids crash on startup when RESEND_API_KEY is not yet set
-let _resend: Resend | null = null;
-function getResend(): Resend {
-  if (!_resend) {
-    const key = process.env.RESEND_API_KEY;
-    if (!key) throw new Error("RESEND_API_KEY not set in environment");
-    _resend = new Resend(key);
-  }
-  return _resend;
+const FROM = process.env.SMTP_FROM || 'LrmTV <support@lrmtv.sbs>';
+
+function init() {
+  const key = process.env.SENDGRID_API_KEY;
+  if (!key) throw new Error('SENDGRID_API_KEY not set in environment');
+  sgMail.setApiKey(key);
 }
 
-const FROM = process.env.SMTP_FROM || "LrmTV <support@lrmtv.sbs>";
-
 export async function verifySmtp(): Promise<{ ok: boolean; error?: string }> {
-  if (!process.env.RESEND_API_KEY) {
-    return { ok: false, error: "RESEND_API_KEY not set" };
+  if (!process.env.SENDGRID_API_KEY) {
+    return { ok: false, error: 'SENDGRID_API_KEY not set' };
   }
   return { ok: true };
 }
 
 export async function sendOtpEmail(to: string, code: string): Promise<void> {
-  const { error } = await getResend().emails.send({
+  init();
+  await sgMail.send({
     from: FROM,
     to,
     subject: `${code} — رمز التحقق من LrmTV`,
@@ -55,6 +51,4 @@ export async function sendOtpEmail(to: string, code: string): Promise<void> {
 </html>`,
     text: `رمز التحقق الخاص بك في LrmTV هو: ${code}\n\nهذا الرمز صالح لمدة 10 دقائق.`,
   });
-
-  if (error) throw new Error(error.message);
 }
