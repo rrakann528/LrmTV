@@ -104,7 +104,7 @@ export default function UsersPanel({
                   style={{ backgroundColor: generateColorFromString(user.username) }}
                   onClick={() => !isYou && onUserClick?.(user.username, user.userId)}
                 >
-                  {user.username.substring(0, 2).toUpperCase()}
+                  {(user.displayName || user.username).substring(0, 2).toUpperCase()}
                   <div className="absolute bottom-0 end-0 w-3 h-3 bg-green-500 border-2 border-[#1a1a1a] rounded-full" />
                 </button>
 

@@ -581,7 +581,8 @@ export default function RoomPage() {
           {/* Floating draggable windows for remote peers */}
           {Array.from(remoteStreams.entries()).map(([socketId, stream]) => {
             const hasVideo = stream.getVideoTracks().length > 0;
-            const label = users.find(u => u.socketId === socketId)?.username || 'Peer';
+            const peer = users.find(u => u.socketId === socketId);
+            const label = peer?.displayName || peer?.username || 'Peer';
             if (!hasVideo) {
               return <audio key={socketId} autoPlay playsInline ref={el => { if (el) el.srcObject = stream; }} style={{ display: 'none' }} />;
             }

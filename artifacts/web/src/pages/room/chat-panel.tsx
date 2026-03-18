@@ -150,7 +150,7 @@ export default function ChatPanel({
                       className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white shadow-lg active:scale-95 transition-transform shrink-0"
                       style={{ backgroundColor: generateColorFromString(msg.username) }}
                     >
-                      {msg.username.substring(0, 2).toUpperCase()}
+                      {(roomUser?.displayName || msg.username).substring(0, 2).toUpperCase()}
                     </button>
                   ) : (
                     <div className="w-8 h-8" />
@@ -167,7 +167,7 @@ export default function ChatPanel({
                     className="text-[11px] font-bold mb-1 px-1 active:opacity-70 transition-opacity"
                     style={{ color: generateColorFromString(msg.username) }}
                   >
-                    {msg.username}
+                    {roomUser?.displayName || msg.username}
                   </button>
                 )}
 
