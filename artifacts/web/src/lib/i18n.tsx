@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 
 export type Language = 'ar' | 'en' | 'fr' | 'tr' | 'es' | 'id';
 
@@ -424,16 +424,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   const setLang = (newLang: Language) => {
     localStorage.setItem(LS_KEY, newLang);
     setLangState(newLang);
-    const langMeta = LANGUAGES.find(l => l.code === newLang);
-    document.documentElement.dir = langMeta?.dir ?? 'ltr';
-    document.documentElement.lang = newLang;
   };
-
-  useEffect(() => {
-    const langMeta = LANGUAGES.find(l => l.code === lang);
-    document.documentElement.dir = langMeta?.dir ?? 'ltr';
-    document.documentElement.lang = lang;
-  }, []);
 
   const t = (key: TranslationKey): string => translations[lang][key] ?? translations.en[key];
   const dir = LANGUAGES.find(l => l.code === lang)?.dir ?? 'ltr';
