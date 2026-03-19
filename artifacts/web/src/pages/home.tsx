@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useSearch } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Tv, Users, User, Users2 } from 'lucide-react';
@@ -19,8 +19,30 @@ const HEADER_H  = 56;
 const NAV_H     = 64;
 const AD_BAR_H  = 60;
 
+function useKeyboardOpen() {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const isEditable = () => {
+      const el = document.activeElement;
+      if (!el) return false;
+      const tag = el.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || (el as HTMLElement).isContentEditable;
+    };
+    const update = () => {
+      const diff = window.innerHeight - vv.height;
+      setOpen(diff > 100 && isEditable());
+    };
+    vv.addEventListener('resize', update);
+    return () => vv.removeEventListener('resize', update);
+  }, []);
+  return open;
+}
+
 export default function HomePage() {
   const { t } = useI18n();
+  const keyboardOpen = useKeyboardOpen();
   const [, setLocation] = useLocation();
   const search = useSearch();
   const params = new URLSearchParams(search);
@@ -139,7 +161,7 @@ export default function HomePage() {
           top: HEADER_H,
           left: 0,
           right: 0,
-          bottom: `calc(${NAV_H + AD_BAR_H}px + env(safe-area-inset-bottom, 0px))`,
+          bottom: keyboardOpen ? 0 : `calc(${NAV_H + AD_BAR_H}px + env(safe-area-inset-bottom, 0px))`,
         }}
       >
         <AnimatePresence mode="wait">
@@ -165,7 +187,7 @@ export default function HomePage() {
 
       {/* ── Fixed Bottom Navigation ───────────────────────────────── */}
       <div
-        className="fixed bottom-0 inset-x-0 z-30 bg-card border-t border-border"
+        className={`fixed bottom-0 inset-x-0 z-30 bg-card border-t border-border transition-transform duration-200 ${keyboardOpen ? 'translate-y-full' : 'translate-y-0'}`}
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
         <div className="flex items-center justify-around px-2" style={{ height: NAV_H }}>

@@ -298,3 +298,5 @@ S1 HLS.js direct
 - **Push**: Group messages + invites trigger push notifications via `sendGroupPush()` in groups.ts
 - **JWT Secret**: Both `auth.ts` and `socket.ts` use `process.env.JWT_SECRET || 'lrmtv_jwt_fallback_secret_2025_please_set_in_env'`
 - **PWA**: Service worker v8 with offline page, manifest with categories/screenshots/shortcuts
+- **Avatar storage**: Base64 data URL in DB (not disk files). Frontend compresses to 256px JPEG before upload (max 500KB). Survives container restarts.
+- **Keyboard handling**: `useKeyboardOpen()` hook uses `visualViewport` API + active element check to hide nav bar when keyboard opens on mobile.

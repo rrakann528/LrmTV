@@ -51,14 +51,37 @@ export function ProfileTab() {
     }
   };
 
+  const compressImage = (file: File, maxSize: number = 256, quality: number = 0.8): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let w = img.width, h = img.height;
+        if (w > h) { if (w > maxSize) { h = (h * maxSize) / w; w = maxSize; } }
+        else { if (h > maxSize) { w = (w * maxSize) / h; h = maxSize; } }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { reject(new Error('Canvas error')); return; }
+        ctx.drawImage(img, 0, 0, w, h);
+        canvas.toBlob(blob => {
+          if (blob) resolve(blob); else reject(new Error('Compression failed'));
+        }, 'image/jpeg', quality);
+      };
+      img.onerror = () => reject(new Error('Image load failed'));
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
     setError('');
     try {
+      const compressed = await compressImage(file, 256, 0.8);
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', compressed, 'avatar.jpg');
       const token = localStorage.getItem('lrmtv_auth_token');
       const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
       const res = await fetch(`${BASE}/api/auth/avatar-upload`, {
