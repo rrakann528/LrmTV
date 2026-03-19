@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Users2, X, Trash2, UserPlus, Crown, LogOut, ChevronRight, ChevronLeft, Send, MessageCircle, Settings } from 'lucide-react';
+import { Plus, Users2, X, Trash2, UserPlus, Crown, LogOut, ChevronRight, ChevronLeft, Send, MessageCircle, Settings, Search, Globe, Lock, Loader2 } from 'lucide-react';
 import { Avatar } from '@/components/avatar';
 import { useAuth, apiFetch } from '@/hooks/use-auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -35,6 +35,7 @@ interface GroupDetail {
   description: string | null;
   avatarColor: string;
   creatorId: number;
+  isPrivate: boolean;
   myRole: string;
   members: GroupMember[];
 }
@@ -62,7 +63,9 @@ export function GroupsTab() {
   const [groupName, setGroupName] = useState('');
   const [groupDesc, setGroupDesc] = useState('');
   const [groupColor, setGroupColor] = useState('#8B5CF6');
+  const [groupIsPrivate, setGroupIsPrivate] = useState(true);
   const [createErr, setCreateErr] = useState('');
+  const [view, setView] = useState<'my' | 'discover'>('my');
 
   const { data: groups = [], isLoading } = useQuery<GroupSummary[]>({
     queryKey: ['groups'],
@@ -75,7 +78,7 @@ export function GroupsTab() {
     mutationFn: async () => {
       const r = await apiFetch('/groups', {
         method: 'POST',
-        body: JSON.stringify({ name: groupName, description: groupDesc, avatarColor: groupColor }),
+        body: JSON.stringify({ name: groupName, description: groupDesc, avatarColor: groupColor, isPrivate: groupIsPrivate }),
       });
       if (!r.ok) {
         const d = await r.json();
@@ -85,9 +88,11 @@ export function GroupsTab() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['groups'] });
+      qc.invalidateQueries({ queryKey: ['public-groups'] });
       setShowCreate(false);
       setGroupName('');
       setGroupDesc('');
+      setGroupIsPrivate(true);
     },
     onError: (e: Error) => setCreateErr(e.message),
   });
@@ -125,47 +130,70 @@ export function GroupsTab() {
               <p className="text-xs text-muted-foreground">{t('groupsDesc')}</p>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
-              {isLoading ? (
-                Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="h-16 bg-muted/40 rounded-2xl animate-pulse" />
-                ))
-              ) : groups.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-                  <Users2 className="w-12 h-12 mb-3 opacity-30" />
-                  <p className="text-sm">{t('noGroups')}</p>
-                  <p className="text-xs mt-1 opacity-60">{t('createFirstGroup')}</p>
-                </div>
-              ) : (
-                groups.map((group, i) => (
-                  <motion.button
-                    key={group.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.04 }}
-                    onClick={() => setSelectedGroupId(group.id)}
-                    className="w-full flex items-center gap-3 bg-card border border-border rounded-2xl p-3.5 text-start"
-                  >
-                    <div
-                      className="w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
-                      style={{ backgroundColor: group.avatarColor + '33', color: group.avatarColor }}
-                    >
-                      {group.name.slice(0, 1).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <p className="font-semibold text-sm text-foreground truncate">{group.name}</p>
-                        {group.role === 'admin' && <Crown className="w-3 h-3 text-yellow-500 flex-shrink-0" />}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {group.memberCount} {t('members')}
-                      </p>
-                    </div>
-                    <Arrow className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                  </motion.button>
-                ))
-              )}
+            <div className="flex mx-4 mb-3 bg-muted/40 rounded-xl p-1">
+              <button
+                onClick={() => setView('my')}
+                className={`flex-1 py-2 text-sm font-medium rounded-lg flex items-center justify-center gap-1.5 transition-all ${view === 'my' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground'}`}
+              >
+                <Users2 className="w-3.5 h-3.5" />
+                {t('myGroups')}
+              </button>
+              <button
+                onClick={() => setView('discover')}
+                className={`flex-1 py-2 text-sm font-medium rounded-lg flex items-center justify-center gap-1.5 transition-all ${view === 'discover' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground'}`}
+              >
+                <Globe className="w-3.5 h-3.5" />
+                {t('discoverGroups')}
+              </button>
             </div>
+
+            {view === 'my' ? (
+              <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
+                {isLoading ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="h-16 bg-muted/40 rounded-2xl animate-pulse" />
+                  ))
+                ) : groups.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                    <Users2 className="w-12 h-12 mb-3 opacity-30" />
+                    <p className="text-sm">{t('noGroups')}</p>
+                    <p className="text-xs mt-1 opacity-60">{t('createFirstGroup')}</p>
+                  </div>
+                ) : (
+                  groups.map((group, i) => (
+                    <motion.button
+                      key={group.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.04 }}
+                      onClick={() => setSelectedGroupId(group.id)}
+                      className="w-full flex items-center gap-3 bg-card border border-border rounded-2xl p-3.5 text-start"
+                    >
+                      <div
+                        className="w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
+                        style={{ backgroundColor: group.avatarColor + '33', color: group.avatarColor }}
+                      >
+                        {group.name.slice(0, 1).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-semibold text-sm text-foreground truncate">{group.name}</p>
+                          {group.role === 'admin' && <Crown className="w-3 h-3 text-yellow-500 flex-shrink-0" />}
+                          {(group as any).isPrivate === false && <Globe className="w-3 h-3 text-cyan-500 flex-shrink-0" />}
+                          {(group as any).isPrivate !== false && <Lock className="w-3 h-3 text-muted-foreground/50 flex-shrink-0" />}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {group.memberCount} {t('members')}
+                        </p>
+                      </div>
+                      <Arrow className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    </motion.button>
+                  ))
+                )}
+              </div>
+            ) : (
+              <DiscoverGroupsView onSelectGroup={setSelectedGroupId} />
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -235,6 +263,25 @@ export function GroupsTab() {
                       />
                     ))}
                   </div>
+                  <div className="flex gap-2 p-1 bg-muted/30 rounded-xl">
+                    <button
+                      onClick={() => setGroupIsPrivate(true)}
+                      className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${groupIsPrivate ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground'}`}
+                    >
+                      <Lock className="w-3.5 h-3.5" />
+                      {t('privateGroup')}
+                    </button>
+                    <button
+                      onClick={() => setGroupIsPrivate(false)}
+                      className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${!groupIsPrivate ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground'}`}
+                    >
+                      <Globe className="w-3.5 h-3.5" />
+                      {t('publicGroup')}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground text-center">
+                    {groupIsPrivate ? t('privateGroupDesc') : t('publicGroupDesc')}
+                  </p>
                   <button
                     onClick={() => { setCreateErr(''); createMut.mutate(); }}
                     disabled={!groupName.trim() || createMut.isPending}
@@ -248,6 +295,103 @@ export function GroupsTab() {
           )}
         </AnimatePresence>,
         document.body
+      )}
+    </div>
+  );
+}
+
+interface PublicGroup {
+  id: number;
+  name: string;
+  description: string | null;
+  avatarColor: string;
+  memberCount: number;
+  isMember: boolean;
+}
+
+function DiscoverGroupsView({ onSelectGroup }: { onSelectGroup: (id: number) => void }) {
+  const { t } = useI18n();
+  const qc = useQueryClient();
+  const [search, setSearch] = useState('');
+  const [joiningId, setJoiningId] = useState<number | null>(null);
+
+  const { data: publicGroups = [], isLoading } = useQuery<PublicGroup[]>({
+    queryKey: ['public-groups', search],
+    queryFn: () => apiFetch(`/groups/public${search ? `?q=${encodeURIComponent(search)}` : ''}`).then(r => r.json()).then(d => Array.isArray(d) ? d : []),
+  });
+
+  const handleJoin = async (groupId: number) => {
+    setJoiningId(groupId);
+    try {
+      const r = await apiFetch(`/groups/${groupId}/join`, { method: 'POST' });
+      if (r.ok) {
+        qc.invalidateQueries({ queryKey: ['public-groups'] });
+        qc.invalidateQueries({ queryKey: ['groups'] });
+      }
+    } catch {}
+    setJoiningId(null);
+  };
+
+  return (
+    <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
+      <div className="relative mb-2">
+        <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder={t('searchGroups')}
+          className="w-full bg-muted/50 border border-border rounded-xl ps-9 pe-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+      </div>
+
+      {isLoading ? (
+        Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="h-16 bg-muted/40 rounded-2xl animate-pulse" />
+        ))
+      ) : publicGroups.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+          <Globe className="w-12 h-12 mb-3 opacity-30" />
+          <p className="text-sm">{t('noPublicGroups')}</p>
+        </div>
+      ) : (
+        publicGroups.map((g, i) => (
+          <motion.div
+            key={g.id}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.04 }}
+            className="flex items-center gap-3 bg-card border border-border rounded-2xl p-3.5"
+          >
+            <div
+              className="w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
+              style={{ backgroundColor: g.avatarColor + '33', color: g.avatarColor }}
+            >
+              {g.name.slice(0, 1).toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-sm text-foreground truncate">{g.name}</p>
+              {g.description && <p className="text-xs text-muted-foreground truncate">{g.description}</p>}
+              <p className="text-[11px] text-muted-foreground">{g.memberCount} {t('members')}</p>
+            </div>
+            {g.isMember ? (
+              <button
+                onClick={() => onSelectGroup(g.id)}
+                className="px-3 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-medium"
+              >
+                {t('joined')}
+              </button>
+            ) : (
+              <button
+                onClick={() => handleJoin(g.id)}
+                disabled={joiningId === g.id}
+                className="px-3 py-1.5 rounded-full bg-violet-600 text-white text-xs font-medium disabled:opacity-50 flex items-center gap-1"
+              >
+                {joiningId === g.id ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                {t('joinGroup')}
+              </button>
+            )}
+          </motion.div>
+        ))
       )}
     </div>
   );
@@ -603,6 +747,34 @@ function GroupSettingsView({ groupId, group, onBack }: { groupId: number; group:
     <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
       {group.description && (
         <p className="text-sm text-muted-foreground bg-muted/30 rounded-xl px-3 py-2">{group.description}</p>
+      )}
+
+      {isAdmin && (
+        <div className="flex items-center gap-3 bg-card border border-border rounded-xl p-3">
+          <div className="flex-1">
+            <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+              {group.isPrivate ? <Lock className="w-3.5 h-3.5" /> : <Globe className="w-3.5 h-3.5 text-cyan-500" />}
+              {group.isPrivate ? t('privateGroup') : t('publicGroup')}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              {group.isPrivate ? t('privateGroupDesc') : t('publicGroupDesc')}
+            </p>
+          </div>
+          <button
+            onClick={async () => {
+              await apiFetch(`/groups/${groupId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ isPrivate: !group.isPrivate }),
+              });
+              qc.invalidateQueries({ queryKey: ['group', groupId] });
+              qc.invalidateQueries({ queryKey: ['groups'] });
+              qc.invalidateQueries({ queryKey: ['public-groups'] });
+            }}
+            className="px-3 py-1.5 rounded-lg bg-muted/50 text-xs font-medium text-muted-foreground hover:bg-muted"
+          >
+            {group.isPrivate ? t('publicGroup') : t('privateGroup')}
+          </button>
+        </div>
       )}
 
       {isAdmin && (

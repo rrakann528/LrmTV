@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, groupsTable, groupMembersTable, groupMessagesTable, usersTable } from "@workspace/db";
-import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
+import { eq, and, desc, asc, sql, inArray, ilike, not } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/auth";
 
 const router = Router();
@@ -51,7 +51,7 @@ router.get("/groups", requireAuth, async (req: AuthRequest, res) => {
 router.post("/groups", requireAuth, async (req: AuthRequest, res) => {
   try {
     const userId = req.userId!;
-    const { name, description, avatarColor } = req.body;
+    const { name, description, avatarColor, isPrivate } = req.body;
     if (!name || typeof name !== "string" || name.trim().length < 1 || name.trim().length > 60) {
       res.status(400).json({ error: "Group name is required (1-60 chars)" });
       return;
@@ -61,6 +61,7 @@ router.post("/groups", requireAuth, async (req: AuthRequest, res) => {
       name: name.trim(),
       description: description?.trim()?.slice(0, 200) || null,
       creatorId: userId,
+      isPrivate: isPrivate !== false,
     };
     if (avatarColor && /^#[0-9A-Fa-f]{6}$/.test(avatarColor)) {
       values.avatarColor = avatarColor;
@@ -78,6 +79,84 @@ router.post("/groups", requireAuth, async (req: AuthRequest, res) => {
   } catch (err: any) {
     console.error("[groups] create error:", err.message);
     res.status(500).json({ error: "Failed to create group" });
+  }
+});
+
+router.get("/groups/public", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.userId!;
+    const search = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+
+    const conditions = [eq(groupsTable.isPrivate, false)];
+    if (search) {
+      conditions.push(ilike(groupsTable.name, `%${search}%`));
+    }
+
+    const publicGroups = await db
+      .select({
+        id: groupsTable.id,
+        name: groupsTable.name,
+        description: groupsTable.description,
+        avatarColor: groupsTable.avatarColor,
+        creatorId: groupsTable.creatorId,
+        isPrivate: groupsTable.isPrivate,
+        createdAt: groupsTable.createdAt,
+      })
+      .from(groupsTable)
+      .where(and(...conditions))
+      .orderBy(desc(groupsTable.createdAt))
+      .limit(50);
+
+    const groupIds = publicGroups.map(g => g.id);
+    let memberCounts: Record<number, number> = {};
+    let myMemberships = new Set<number>();
+
+    if (groupIds.length > 0) {
+      const counts = await db
+        .select({ groupId: groupMembersTable.groupId, count: sql<number>`count(*)::int` })
+        .from(groupMembersTable)
+        .where(inArray(groupMembersTable.groupId, groupIds))
+        .groupBy(groupMembersTable.groupId);
+      memberCounts = Object.fromEntries(counts.map(c => [c.groupId, c.count]));
+
+      const myRows = await db
+        .select({ groupId: groupMembersTable.groupId })
+        .from(groupMembersTable)
+        .where(and(inArray(groupMembersTable.groupId, groupIds), eq(groupMembersTable.userId, userId)));
+      myMemberships = new Set(myRows.map(r => r.groupId));
+    }
+
+    res.json(publicGroups.map(g => ({
+      ...g,
+      memberCount: memberCounts[g.id] || 0,
+      isMember: myMemberships.has(g.id),
+    })));
+  } catch (err: any) {
+    console.error("[groups] public list error:", err.message);
+    res.status(500).json({ error: "Failed to fetch public groups" });
+  }
+});
+
+router.post("/groups/:id/join", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.userId!;
+    const groupId = parseInt(req.params.id);
+    if (isNaN(groupId)) { res.status(400).json({ error: "Invalid group ID" }); return; }
+
+    const [group] = await db.select().from(groupsTable).where(eq(groupsTable.id, groupId)).limit(1);
+    if (!group) { res.status(404).json({ error: "Group not found" }); return; }
+    if (group.isPrivate) { res.status(403).json({ error: "Cannot join private group" }); return; }
+
+    const [existing] = await db.select().from(groupMembersTable)
+      .where(and(eq(groupMembersTable.groupId, groupId), eq(groupMembersTable.userId, userId)))
+      .limit(1);
+    if (existing) { res.status(400).json({ error: "Already a member" }); return; }
+
+    await db.insert(groupMembersTable).values({ groupId, userId, role: "member" });
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("[groups] join error:", err.message);
+    res.status(500).json({ error: "Failed to join group" });
   }
 });
 
@@ -223,11 +302,12 @@ router.put("/groups/:id", requireAuth, async (req: AuthRequest, res) => {
       return;
     }
 
-    const { name, description, avatarColor } = req.body;
+    const { name, description, avatarColor, isPrivate } = req.body;
     const updates: any = {};
     if (name) updates.name = name.trim().slice(0, 60);
     if (description !== undefined) updates.description = description?.trim()?.slice(0, 200) || null;
     if (avatarColor) updates.avatarColor = avatarColor;
+    if (typeof isPrivate === 'boolean') updates.isPrivate = isPrivate;
 
     if (Object.keys(updates).length === 0) {
       res.status(400).json({ error: "No updates" });
