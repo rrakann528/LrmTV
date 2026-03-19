@@ -484,7 +484,7 @@ export default function RoomPage() {
           {/* Player area:
               mobile  → fixed 16:9 aspect ratio
               md+     → flex-grow (fills all available height) */}
-          <div className="w-full aspect-[16/8] md:aspect-auto md:flex-grow relative bg-black">
+          <div className="w-full aspect-[2/1] md:aspect-auto md:flex-grow relative bg-black shrink-0">
             {syncState.url ? (
               <>
                 <div style={{ position: 'absolute', inset: 0 }}>

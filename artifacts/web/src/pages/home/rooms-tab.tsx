@@ -158,14 +158,14 @@ export function RoomsTab() {
       </AnimatePresence>
 
       {/* Search & Join */}
-      <div className="px-4 pt-4 pb-2 space-y-2">
+      <div className="px-4 pt-2 pb-1.5 space-y-1.5">
         <div className="relative">
           <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder={t('searchRoomPlaceholder')}
-            className="w-full bg-muted/50 border border-border rounded-xl pl-4 pr-10 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full bg-muted/50 border border-border rounded-xl pl-4 pr-10 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </div>
         <div className="flex gap-2">
@@ -173,13 +173,13 @@ export function RoomsTab() {
             value={joinCode}
             onChange={e => setJoinCode(e.target.value)}
             placeholder={t('enterRoomCode')}
-            className="flex-1 bg-muted/50 border border-border rounded-xl px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            className="flex-1 bg-muted/50 border border-border rounded-xl px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             onKeyDown={e => e.key === 'Enter' && handleJoinCode()}
           />
           <button
             onClick={handleJoinCode}
             disabled={!joinCode.trim()}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium disabled:opacity-40"
+            className="px-3 py-1.5 bg-primary text-primary-foreground rounded-xl text-sm font-medium disabled:opacity-40"
           >
             {t('enterRoom')}
           </button>

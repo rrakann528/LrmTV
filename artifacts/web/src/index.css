@@ -88,10 +88,12 @@
   
   body {
     @apply bg-background text-foreground font-sans antialiased overflow-x-hidden selection:bg-primary/30 selection:text-primary;
-    height: 100dvh;
     height: 100vh;
+    height: 100dvh;
     overflow: hidden;
     overscroll-behavior: none;
+    position: fixed;
+    inset: 0;
   }
 
   #root {

@@ -103,12 +103,12 @@ export default function YoutubeSearch({ onAdd, isAdding, lang = 'en' }: Props) {
   return (
     <div ref={containerRef} className="relative">
       {/* Mode toggle */}
-      <div className="flex gap-1 mb-1.5">
+      <div className="flex gap-1 mb-1">
         <button
           type="button"
           onClick={() => switchMode('search')}
           className={cn(
-            'flex-1 flex items-center justify-center gap-1.5 h-7 rounded-lg text-xs font-medium transition-colors',
+            'flex-1 flex items-center justify-center gap-1.5 h-6 rounded-lg text-[11px] font-medium transition-colors',
             mode === 'search'
               ? 'bg-red-600/80 text-white'
               : 'bg-white/5 text-white/40 hover:text-white/70 hover:bg-white/10',
@@ -121,7 +121,7 @@ export default function YoutubeSearch({ onAdd, isAdding, lang = 'en' }: Props) {
           type="button"
           onClick={() => switchMode('url')}
           className={cn(
-            'flex-1 flex items-center justify-center gap-1.5 h-7 rounded-lg text-xs font-medium transition-colors',
+            'flex-1 flex items-center justify-center gap-1.5 h-6 rounded-lg text-[11px] font-medium transition-colors',
             mode === 'url'
               ? 'bg-primary/80 text-white'
               : 'bg-white/5 text-white/40 hover:text-white/70 hover:bg-white/10',
@@ -142,7 +142,7 @@ export default function YoutubeSearch({ onAdd, isAdding, lang = 'en' }: Props) {
               value={query}
               onChange={handleQueryChange}
               placeholder={t('searchPlaceholder')}
-              className="w-full h-9 ps-9 pe-8 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder-white/30 outline-none focus:border-red-500/60 transition-colors"
+              className="w-full h-8 ps-8 pe-7 rounded-lg bg-white/5 border border-white/10 text-white text-xs placeholder-white/30 outline-none focus:border-red-500/60 transition-colors"
             />
             {query && (
               <button
@@ -157,7 +157,7 @@ export default function YoutubeSearch({ onAdd, isAdding, lang = 'en' }: Props) {
           <button
             type="submit"
             disabled={!query.trim() || loading}
-            className="h-9 w-9 shrink-0 flex items-center justify-center rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-white"
+            className="h-8 w-8 shrink-0 flex items-center justify-center rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-white"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
           </button>
@@ -174,13 +174,13 @@ export default function YoutubeSearch({ onAdd, isAdding, lang = 'en' }: Props) {
               value={urlInput}
               onChange={e => setUrlInput(e.target.value)}
               placeholder={t('videoUrl')}
-              className="w-full h-9 ps-9 pe-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder-white/30 outline-none focus:border-primary transition-colors"
+              className="w-full h-8 ps-8 pe-3 rounded-lg bg-white/5 border border-white/10 text-white text-xs placeholder-white/30 outline-none focus:border-primary transition-colors"
             />
           </div>
           <button
             type="submit"
             disabled={!urlInput.trim() || isAdding}
-            className="h-9 w-9 shrink-0 flex items-center justify-center rounded-xl bg-primary hover:bg-primary/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-white"
+            className="h-8 w-8 shrink-0 flex items-center justify-center rounded-lg bg-primary hover:bg-primary/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-white"
           >
             {isAdding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
           </button>
