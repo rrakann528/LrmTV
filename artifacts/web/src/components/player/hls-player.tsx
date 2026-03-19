@@ -748,14 +748,12 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
           hls.attachMedia(video);
         };
 
-        // S5 — CF Worker full proxy: manifest + ALL segments rewritten to go through Cloudflare
-        // (mode=full tells the Worker to rewrite segment URLs back to itself)
         const s5_cfFullProxy = () => {
           if (cancelled) return;
           if (!CF_PROXY) { s6_apiProxy(); return; }
           const cfUrl = `${CF_PROXY}?url=${encodeURIComponent(src)}&ref=${encodeURIComponent(src)}&mode=full`;
           setStatusMsg('hls-proxy');
-          const hls = makeHls(() => s6_apiProxy());
+          const hls = makeHls(() => { setError('ip-locked'); setStatusMsg(null); });
           hlsRef.current = hls;
           hls.loadSource(cfUrl);
           hls.attachMedia(video);
@@ -785,9 +783,8 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
           hls.attachMedia(video);
         };
 
-        // HTTP src on HTTPS page → browser blocks it as mixed content → skip to API proxy
         if (src.startsWith('http:') && window.location.protocol === 'https:') {
-          s6_apiProxy();
+          CF_PROXY ? s5_cfFullProxy() : s6_apiProxy();
           return;
         }
 
