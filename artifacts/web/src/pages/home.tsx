@@ -20,7 +20,7 @@ const NAV_H     = 64;
 const AD_BAR_H  = 60;
 
 function useVisualViewport() {
-  const [height, setHeight] = useState(window.innerHeight);
+  const [height, setHeight] = useState(() => window.visualViewport?.height ?? window.innerHeight);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
 
   useEffect(() => {
@@ -40,10 +40,14 @@ function useVisualViewport() {
       setKeyboardOpen(diff > 80 && isEditable());
     };
 
+    const onWindowResize = () => setHeight(vv.height);
+
+    update();
     vv.addEventListener('resize', update);
-    window.addEventListener('resize', () => setHeight(vv.height));
+    window.addEventListener('resize', onWindowResize);
     return () => {
       vv.removeEventListener('resize', update);
+      window.removeEventListener('resize', onWindowResize);
     };
   }, []);
 
@@ -138,11 +142,8 @@ export default function HomePage() {
 
   const userName = user?.displayName || user?.username || t('guestName');
 
-  const bottomBar = keyboardOpen ? 0 : NAV_H + AD_BAR_H;
-  const contentH = viewportHeight - HEADER_H - bottomBar;
-
   return (
-    <div className="bg-background flex flex-col" style={{ height: viewportHeight, overflow: 'hidden' }}>
+    <div className="bg-background flex flex-col" style={{ height: keyboardOpen ? viewportHeight : viewportHeight - AD_BAR_H, overflow: 'hidden' }}>
       {/* ── Header ─────────────────────────────────────────── */}
       <div
         className="flex items-center justify-between px-4 bg-card border-b border-border flex-shrink-0 z-30"
@@ -167,7 +168,7 @@ export default function HomePage() {
       </div>
 
       {/* ── Content ────────────────────────────────────────── */}
-      <div className="flex-1 overflow-hidden relative" style={{ height: contentH }}>
+      <div className="flex-1 overflow-hidden relative min-h-0">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
