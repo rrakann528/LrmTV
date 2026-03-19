@@ -640,11 +640,11 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
       const loadViaHls = () => {
         if (cancelled) return;
 
-        const s2_native = (onFail?: () => void) => {
+        const s2_native = (onFail?: () => void, timeoutMs = 15_000) => {
           if (cancelled) return;
           destroyAll();
           setStatusMsg('native');
-          setTimeout(() => {
+          const setup = () => {
             if (cancelled) return;
             video.removeAttribute('crossorigin');
             video.setAttribute('referrerpolicy', 'no-referrer');
@@ -652,35 +652,52 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
             video.load();
             video.src = src;
             video.load();
-            const onMeta = () => {
-              if (!cancelled) {
-                const live = !isFinite(video.duration) || video.duration === Infinity;
-                isLiveRef.current = live; setIsLive(live);
-                onDurationChange(); setStatusMsg(null); setError(null); startStallWatchdog(); signalReady();
-              }
-            };
-            const onErr = () => {
-              if (!cancelled) {
-                if (onFail) { onFail(); }
-                else { setError('ip-locked'); setStatusMsg(null); }
-              }
-            };
             let nativeDone = false;
-            const onMetaWrapped = () => { if (nativeDone) return; nativeDone = true; clearTimeout(fallbackTimer); onMeta(); };
-            const onErrWrapped  = () => { if (nativeDone) return; nativeDone = true; clearTimeout(fallbackTimer); onErr(); };
+            const onSuccess = () => {
+              if (nativeDone || cancelled) return;
+              nativeDone = true;
+              clearTimeout(fallbackTimer);
+              video.removeEventListener('loadedmetadata', onSuccess);
+              video.removeEventListener('canplay', onSuccess);
+              video.removeEventListener('playing', onSuccess);
+              video.removeEventListener('error', onErrWrapped);
+              const live = !isFinite(video.duration) || video.duration === Infinity;
+              isLiveRef.current = live; setIsLive(live);
+              onDurationChange(); setStatusMsg(null); setError(null); startStallWatchdog(); signalReady();
+            };
+            const onErrWrapped = () => {
+              if (nativeDone || cancelled) return;
+              nativeDone = true;
+              clearTimeout(fallbackTimer);
+              video.removeEventListener('loadedmetadata', onSuccess);
+              video.removeEventListener('canplay', onSuccess);
+              video.removeEventListener('playing', onSuccess);
+              video.removeEventListener('error', onErrWrapped);
+              if (onFail) { onFail(); }
+              else { setError('ip-locked'); setStatusMsg(null); }
+            };
             const fallbackTimer = setTimeout(() => {
               if (nativeDone) return;
               nativeDone = true;
-              video.removeEventListener('loadedmetadata', onMetaWrapped);
+              video.removeEventListener('loadedmetadata', onSuccess);
+              video.removeEventListener('canplay', onSuccess);
+              video.removeEventListener('playing', onSuccess);
               video.removeEventListener('error', onErrWrapped);
               if (!cancelled) {
                 if (onFail) { onFail(); }
                 else { setError('ip-locked'); setStatusMsg(null); }
               }
-            }, 18_000);
-            video.addEventListener('loadedmetadata', onMetaWrapped, { once: true });
-            video.addEventListener('error',          onErrWrapped,  { once: true });
-          }, 100);
+            }, timeoutMs);
+            video.addEventListener('loadedmetadata', onSuccess);
+            video.addEventListener('canplay', onSuccess);
+            video.addEventListener('playing', onSuccess);
+            video.addEventListener('error', onErrWrapped);
+          };
+          if (hlsRef.current) {
+            setTimeout(setup, 150);
+          } else {
+            setup();
+          }
         };
 
         // S7 — API proxy with native <video> (for iOS Safari where HLS.js is not supported)
@@ -774,21 +791,28 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
           return;
         }
 
-        // S1 — HLS.js direct (best features: adaptive bitrate, quality switching)
-        // Failure chain: Safari → S2 native → S3 CF-manifest → S4 CF-full → S5 CF-full+rewrite → S6 API proxy
-        //                Chrome →              S3 CF-manifest → S4 CF-full → S5 CF-full+rewrite → S6 API proxy
         setStatusMsg('hls-direct');
-        if (Hls.isSupported()) {
-          const canNativeHls = video.canPlayType('application/vnd.apple.mpegurl') !== '';
-          const onS1Fail = canNativeHls
-            ? () => s2_native(() => CF_PROXY ? s3_cfManifestProxy() : s6_apiProxy())
-            : () => CF_PROXY ? s3_cfManifestProxy() : s6_apiProxy();
+        const canNativeHls = video.canPlayType('application/vnd.apple.mpegurl') !== '';
+
+        if (canNativeHls) {
+          s2_native(() => {
+            if (cancelled) return;
+            if (Hls.isSupported()) {
+              const onHlsFail = () => CF_PROXY ? s3_cfManifestProxy() : s6_apiProxy();
+              const hls = makeHls(onHlsFail);
+              hlsRef.current = hls;
+              hls.loadSource(src);
+              hls.attachMedia(video);
+            } else {
+              s7_nativeApiProxy();
+            }
+          }, 12_000);
+        } else if (Hls.isSupported()) {
+          const onS1Fail = () => CF_PROXY ? s3_cfManifestProxy() : s6_apiProxy();
           const hls = makeHls(onS1Fail);
           hlsRef.current = hls;
           hls.loadSource(src);
           hls.attachMedia(video);
-        } else if (video.canPlayType('application/vnd.apple.mpegurl') !== '') {
-          s2_native(() => s7_nativeApiProxy());
         } else {
           setStatusMsg(null); setError('unsupported');
         }
