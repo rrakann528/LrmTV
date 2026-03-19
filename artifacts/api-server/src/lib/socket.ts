@@ -1,5 +1,6 @@
 import { Server as HttpServer } from "http";
 import { Server, Socket } from "socket.io";
+import jwt from "jsonwebtoken";
 import { db, chatMessagesTable, roomsTable, playlistItemsTable, roomInvitesTable, usersTable, siteSettingsTable } from "@workspace/db";
 import { eq, notInArray, inArray } from "drizzle-orm";
 
@@ -363,11 +364,16 @@ export function initSocketServer(httpServer: HttpServer): Server {
   io.on("connection", (socket: Socket) => {
     let currentRoomSlug: string | null = null;
 
-    // Allow clients to subscribe to their own user room (for DMs)
     socket.on("join-user-room", (data: { userId?: number }) => {
-      if (data?.userId) {
-        socket.join(`user:${data.userId}`);
-      }
+      if (!data?.userId) return;
+      const token = (socket.handshake.auth as any)?.token || '';
+      const secret = process.env.JWT_SECRET || 'dev-secret';
+      try {
+        const decoded = jwt.verify(token, secret) as any;
+        if (decoded?.userId === data.userId) {
+          socket.join(`user:${data.userId}`);
+        }
+      } catch {}
     });
 
     // Late identification — sent when authUser loads after connect

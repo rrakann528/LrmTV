@@ -2,13 +2,14 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   UserPlus, Clock, Send, Bell, BellOff,
-  Check, X, Loader2, Users, MessageCircle,
+  Check, X, Loader2, Users, MessageCircle, Users2, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { apiFetch } from '@/hooks/use-auth';
 import { usePush } from '@/hooks/use-push';
 import { generateColorFromString, cn } from '@/lib/utils';
 import { DmChat } from '@/pages/home/dm-chat';
 import { Socket } from 'socket.io-client';
+import { useI18n } from '@/lib/i18n';
 
 interface Friend {
   id: number;
@@ -46,11 +47,23 @@ function Avatar({ username, color, size = 36 }: { username: string; color?: stri
   );
 }
 
+interface GroupSummary {
+  id: number;
+  name: string;
+  avatarColor: string;
+  memberCount: number;
+}
+
 export default function FriendsPanel({ userId, roomSlug, roomName, socket: _socket, roomUsers, myUsername: _myUsername }: FriendsPanelProps) {
+  const { t } = useI18n();
   const [friends, setFriends]       = useState<Friend[]>([]);
   const [inviting, setInviting]     = useState<number | null>(null);
   const [inviteResults, setInviteResults] = useState<Map<number, 'sent' | 'no_notif'>>(new Map());
   const [dmFriend, setDmFriend]     = useState<Friend | null>(null);
+  const [groups, setGroups]         = useState<GroupSummary[]>([]);
+  const [showGroups, setShowGroups] = useState(false);
+  const [invitingGroup, setInvitingGroup] = useState<number | null>(null);
+  const [groupInviteResults, setGroupInviteResults] = useState<Map<number, string>>(new Map());
 
   const { permission, subscribed, subscribe, inviteFriend } = usePush(userId);
 
@@ -63,6 +76,40 @@ export default function FriendsPanel({ userId, roomSlug, roomName, socket: _sock
   }, []);
 
   useEffect(() => { loadFriends(); }, [loadFriends]);
+
+  const loadGroups = useCallback(async () => {
+    try {
+      const r = await apiFetch('/groups');
+      if (r.ok) {
+        const data = await r.json();
+        setGroups(Array.isArray(data) ? data : []);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => { loadGroups(); }, [loadGroups]);
+
+  const [groupInviteErr, setGroupInviteErr] = useState<string | null>(null);
+
+  const handleInviteGroup = async (groupId: number) => {
+    setInvitingGroup(groupId);
+    setGroupInviteErr(null);
+    try {
+      const r = await apiFetch(`/groups/${groupId}/invite-room`, {
+        method: 'POST',
+        body: JSON.stringify({ roomSlug, roomName }),
+      });
+      if (r.ok) {
+        const data = await r.json();
+        setGroupInviteResults(prev => new Map(prev).set(groupId, `${data.invited}`));
+      } else {
+        setGroupInviteErr(t('errorOccurred') || 'Failed');
+      }
+    } catch {
+      setGroupInviteErr(t('errorOccurred') || 'Failed');
+    }
+    setInvitingGroup(null);
+  };
 
   const respond = async (id: number, action: 'accept' | 'decline') => {
     await apiFetch(`/friends/${id}`, { method: 'PATCH', body: JSON.stringify({ action }) });
@@ -187,7 +234,48 @@ export default function FriendsPanel({ userId, roomSlug, roomName, socket: _sock
           </div>
         )}
 
-        {accepted.length === 0 && pending.length === 0 && sent.length === 0 && (
+        {groups.length > 0 && (
+          <div>
+            <button
+              onClick={() => setShowGroups(!showGroups)}
+              className="flex items-center gap-2 text-white/40 text-[11px] font-medium mb-2 px-1 w-full"
+            >
+              <Users2 className="w-3 h-3" />
+              <span className="flex-grow text-start">{t('inviteGroupMembers')}</span>
+              {showGroups ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            </button>
+            {showGroups && groupInviteErr && (
+              <p className="text-xs text-red-400 mb-2 px-1">{groupInviteErr}</p>
+            )}
+            {showGroups && groups.map(g => (
+              <div key={g.id} className="flex items-center gap-3 p-3 rounded-xl bg-white/5 mb-2">
+                <div
+                  className="w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm flex-shrink-0"
+                  style={{ backgroundColor: g.avatarColor + '33', color: g.avatarColor }}
+                >
+                  {g.name.slice(0, 1).toUpperCase()}
+                </div>
+                <div className="flex-grow min-w-0">
+                  <p className="text-white text-sm font-medium truncate">{g.name}</p>
+                  <p className="text-white/30 text-[10px]">{g.memberCount} {t('members')}</p>
+                </div>
+                {groupInviteResults.has(g.id)
+                  ? <span className="text-green-400 text-xs flex items-center gap-1"><Check className="w-3 h-3" />{groupInviteResults.get(g.id)}</span>
+                  : <button
+                      onClick={() => handleInviteGroup(g.id)}
+                      disabled={invitingGroup === g.id}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-violet-500/20 text-violet-400 text-xs font-medium hover:bg-violet-500/30 transition disabled:opacity-50"
+                    >
+                      {invitingGroup === g.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                      {t('inviteGroupMembers')}
+                    </button>
+                }
+              </div>
+            ))}
+          </div>
+        )}
+
+        {accepted.length === 0 && pending.length === 0 && sent.length === 0 && groups.length === 0 && (
           <div className="flex flex-col items-center justify-center flex-grow py-12 text-center">
             <Users className="w-10 h-10 text-white/10 mb-3" />
             <p className="text-white/30 text-sm">لا يوجد أصدقاء بعد</p>

@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Users2, X, Trash2, UserPlus, Crown, LogOut, ChevronRight, ChevronLeft, Send } from 'lucide-react';
+import { Plus, Users2, X, Trash2, UserPlus, Crown, LogOut, ChevronRight, ChevronLeft, Send, MessageCircle, Settings } from 'lucide-react';
 import { Avatar } from '@/components/avatar';
 import { useAuth, apiFetch } from '@/hooks/use-auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useI18n } from '@/lib/i18n';
+import { io, Socket } from 'socket.io-client';
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 interface GroupSummary {
   id: number;
@@ -34,6 +37,18 @@ interface GroupDetail {
   creatorId: number;
   myRole: string;
   members: GroupMember[];
+}
+
+interface GroupMsg {
+  id: number;
+  groupId: number;
+  senderId: number;
+  content: string;
+  createdAt: string;
+  senderUsername: string;
+  senderDisplayName: string | null;
+  senderAvatarColor: string;
+  senderAvatarUrl: string | null;
 }
 
 const GROUP_COLORS = ['#8B5CF6', '#EC4899', '#06B6D4', '#F59E0B', '#10B981', '#EF4444', '#3B82F6', '#F97316'];
@@ -241,13 +256,9 @@ export function GroupsTab() {
 function GroupDetailView({ groupId, onBack }: { groupId: number; onBack: () => void }) {
   const { user } = useAuth();
   const { t, dir } = useI18n();
-  const qc = useQueryClient();
-  const [addUsername, setAddUsername] = useState('');
-  const [addErr, setAddErr] = useState('');
-  const [inviteSlug, setInviteSlug] = useState('');
-  const [inviteResult, setInviteResult] = useState('');
+  const [tab, setTab] = useState<'chat' | 'settings'>('chat');
 
-  const { data: group, isLoading } = useQuery<GroupDetail>({
+  const { data: group, isLoading, isError, refetch } = useQuery<GroupDetail>({
     queryKey: ['group', groupId],
     queryFn: async () => {
       const r = await apiFetch(`/groups/${groupId}`);
@@ -255,6 +266,280 @@ function GroupDetailView({ groupId, onBack }: { groupId: number; onBack: () => v
       return r.json();
     },
   });
+
+  const BackArrow = dir === 'rtl' ? ChevronRight : ChevronLeft;
+
+  if (isError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-3">
+        <p className="text-sm text-destructive">{t('errorOccurred') || 'Something went wrong'}</p>
+        <div className="flex gap-2">
+          <button onClick={onBack} className="px-4 py-2 bg-muted rounded-xl text-sm">
+            <BackArrow className="w-4 h-4 inline" />
+          </button>
+          <button onClick={() => refetch()} className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm">
+            {t('retry') || 'Retry'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading || !group) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <motion.div
+      className="flex flex-col h-full"
+      initial={{ opacity: 0, x: dir === 'rtl' ? -20 : 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: dir === 'rtl' ? -20 : 20 }}
+    >
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
+        <button onClick={onBack} className="p-2 rounded-xl hover:bg-muted/50">
+          <BackArrow className="w-5 h-5" />
+        </button>
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg flex-shrink-0"
+          style={{ backgroundColor: group.avatarColor + '33', color: group.avatarColor }}
+        >
+          {group.name.slice(0, 1).toUpperCase()}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-foreground truncate">{group.name}</p>
+          <p className="text-xs text-muted-foreground">{group.members.length} {t('members')}</p>
+        </div>
+      </div>
+
+      <div className="flex border-b border-border">
+        <button
+          onClick={() => setTab('chat')}
+          className={`flex-1 py-2.5 text-sm font-medium flex items-center justify-center gap-1.5 transition-colors ${tab === 'chat' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground'}`}
+        >
+          <MessageCircle className="w-4 h-4" />
+          {t('groupChat')}
+        </button>
+        <button
+          onClick={() => setTab('settings')}
+          className={`flex-1 py-2.5 text-sm font-medium flex items-center justify-center gap-1.5 transition-colors ${tab === 'settings' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground'}`}
+        >
+          <Settings className="w-4 h-4" />
+          {t('members')}
+        </button>
+      </div>
+
+      {tab === 'chat' ? (
+        <GroupChatView groupId={groupId} group={group} />
+      ) : (
+        <GroupSettingsView groupId={groupId} group={group} onBack={onBack} />
+      )}
+    </motion.div>
+  );
+}
+
+function GroupChatView({ groupId, group }: { groupId: number; group: GroupDetail }) {
+  const { user } = useAuth();
+  const { t, dir, lang } = useI18n();
+  const [messages, setMessages] = useState<GroupMsg[]>([]);
+  const [text, setText] = useState('');
+  const [sending, setSending] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const socketRef = useRef<Socket | null>(null);
+  const seenIds = useRef<Set<number>>(new Set());
+
+  const { data: history = [], isLoading } = useQuery<GroupMsg[]>({
+    queryKey: ['group-messages', groupId],
+    queryFn: () => apiFetch(`/groups/${groupId}/messages`).then(r => r.json()).then(d => Array.isArray(d) ? d : []),
+  });
+
+  useEffect(() => {
+    setMessages(history);
+    history.forEach(m => seenIds.current.add(m.id));
+  }, [history]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('lrmtv_auth_token') || '';
+    const socket = io(BASE || '/', {
+      path: '/api/socket.io',
+      transports: ['websocket', 'polling'],
+      auth: { token },
+    });
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      socket.emit('join-user-room', { userId: user?.id });
+    });
+
+    socket.on('group:message', (msg: GroupMsg) => {
+      if (msg.groupId !== groupId) return;
+      if (seenIds.current.has(msg.id)) return;
+      seenIds.current.add(msg.id);
+      setMessages(prev => [...prev, msg]);
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [groupId, user?.id]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const send = async () => {
+    const content = text.trim();
+    if (!content || sending || !user) return;
+    setSending(true);
+    setText('');
+    const tempId = -Date.now();
+    const optimistic: GroupMsg = {
+      id: tempId,
+      groupId,
+      senderId: user.id,
+      content,
+      createdAt: new Date().toISOString(),
+      senderUsername: user.username,
+      senderDisplayName: user.displayName || null,
+      senderAvatarColor: user.avatarColor || '#06B6D4',
+      senderAvatarUrl: user.avatarUrl || null,
+    };
+    seenIds.current.add(tempId);
+    setMessages(prev => [...prev, optimistic]);
+
+    try {
+      const res = await apiFetch(`/groups/${groupId}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ content }),
+      });
+      if (res.ok) {
+        const saved: GroupMsg = await res.json();
+        seenIds.current.add(saved.id);
+        setMessages(prev => prev.map(m => m.id === tempId ? saved : m));
+      } else {
+        setMessages(prev => prev.filter(m => m.id !== tempId));
+        setText(content);
+      }
+    } catch {
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+      setText(content);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const locale = lang === 'ar' ? 'ar-SA' : lang === 'fr' ? 'fr-FR' : lang === 'tr' ? 'tr-TR' : lang === 'es' ? 'es-ES' : lang === 'id' ? 'id-ID' : 'en-US';
+  const formatTime = (iso: string) => new Date(iso).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+  const formatDateSep = (iso: string) => {
+    const d = new Date(iso);
+    const today = new Date();
+    if (d.toDateString() === today.toDateString()) return t('today') || 'Today';
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (d.toDateString() === yesterday.toDateString()) return t('yesterday') || 'Yesterday';
+    return d.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+  };
+
+  const groupedMessages: { date: string; msgs: GroupMsg[] }[] = [];
+  let lastDate = '';
+  for (const msg of messages) {
+    const dateStr = new Date(msg.createdAt).toDateString();
+    if (dateStr !== lastDate) {
+      lastDate = dateStr;
+      groupedMessages.push({ date: msg.createdAt, msgs: [msg] });
+    } else {
+      groupedMessages[groupedMessages.length - 1].msgs.push(msg);
+    }
+  }
+
+  return (
+    <div className="flex flex-col flex-1 min-h-0">
+      <div className="flex-1 overflow-y-auto px-4 py-3">
+        {isLoading ? (
+          <div className="flex justify-center py-10">
+            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3">
+            <MessageCircle className="w-10 h-10 opacity-20" />
+            <p className="text-sm">{t('groupChatEmpty')}</p>
+          </div>
+        ) : (
+          groupedMessages.map((grp, gi) => (
+            <div key={gi}>
+              <div className="flex justify-center my-3">
+                <span className="text-[10px] text-muted-foreground bg-muted/50 px-3 py-1 rounded-full">
+                  {formatDateSep(grp.date)}
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                {grp.msgs.map(msg => {
+                  const isMe = msg.senderId === user?.id;
+                  const isOptimistic = msg.id < 0;
+                  const senderName = msg.senderDisplayName || msg.senderUsername;
+                  return (
+                    <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                      {!isMe && (
+                        <Avatar name={senderName} color={msg.senderAvatarColor} url={msg.senderAvatarUrl} size={28} />
+                      )}
+                      <div className={`max-w-[75%] px-3.5 py-2 rounded-2xl text-sm ${!isMe ? 'ms-2' : ''} ${
+                        isMe
+                          ? `bg-primary text-primary-foreground ${dir === 'rtl' ? 'rounded-tl-sm' : 'rounded-tr-sm'} ${isOptimistic ? 'opacity-60' : ''}`
+                          : `bg-muted text-foreground ${dir === 'rtl' ? 'rounded-tr-sm' : 'rounded-tl-sm'}`
+                      }`}>
+                        {!isMe && (
+                          <p className="text-[11px] font-bold mb-0.5" style={{ color: msg.senderAvatarColor }}>{senderName}</p>
+                        )}
+                        <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                        <p className={`text-[10px] mt-0.5 ${isMe ? 'text-primary-foreground/50 text-end' : 'text-muted-foreground text-start'}`}>
+                          {isOptimistic ? '...' : formatTime(msg.createdAt)}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      <div className="p-3 border-t border-border bg-card/95 backdrop-blur-sm">
+        <div className="flex items-center gap-2">
+          <input
+            value={text}
+            onChange={e => setText(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
+            placeholder={t('typeMessage') || 'Type a message...'}
+            className="flex-1 bg-muted/50 border border-border rounded-2xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+          <button
+            onClick={send}
+            disabled={!text.trim() || sending}
+            className="w-10 h-10 bg-primary rounded-full flex items-center justify-center disabled:opacity-40 flex-shrink-0 active:scale-95 transition-transform"
+          >
+            <Send className="w-4 h-4 text-primary-foreground" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GroupSettingsView({ groupId, group, onBack }: { groupId: number; group: GroupDetail; onBack: () => void }) {
+  const { user } = useAuth();
+  const { t, dir } = useI18n();
+  const qc = useQueryClient();
+  const [addUsername, setAddUsername] = useState('');
+  const [addErr, setAddErr] = useState('');
+  const [inviteSlug, setInviteSlug] = useState('');
+  const [inviteResult, setInviteResult] = useState('');
 
   const addMemberMut = useMutation({
     mutationFn: async () => {
@@ -308,145 +593,112 @@ function GroupDetailView({ groupId, onBack }: { groupId: number; onBack: () => v
     onSuccess: (data) => {
       setInviteResult(`${t('invited')} ${data.invited} ${t('members')}`);
       setInviteSlug('');
-      setTimeout(() => setInviteResult(''), 3000);
     },
   });
 
-  const BackArrow = dir === 'rtl' ? ChevronRight : ChevronLeft;
-  const isAdmin = group?.myRole === 'admin';
-  const isCreator = group?.creatorId === user?.id;
-
-  if (isLoading || !group) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+  const isAdmin = group.myRole === 'admin';
+  const isCreator = group.creatorId === user?.id;
 
   return (
-    <motion.div
-      className="flex flex-col h-full"
-      initial={{ opacity: 0, x: dir === 'rtl' ? -20 : 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: dir === 'rtl' ? -20 : 20 }}
-    >
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
-        <button onClick={onBack} className="p-2 rounded-xl hover:bg-muted/50">
-          <BackArrow className="w-5 h-5" />
-        </button>
-        <div
-          className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg flex-shrink-0"
-          style={{ backgroundColor: group.avatarColor + '33', color: group.avatarColor }}
-        >
-          {group.name.slice(0, 1).toUpperCase()}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold text-foreground truncate">{group.name}</p>
-          <p className="text-xs text-muted-foreground">{group.members.length} {t('members')}</p>
-        </div>
-      </div>
+    <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+      {group.description && (
+        <p className="text-sm text-muted-foreground bg-muted/30 rounded-xl px-3 py-2">{group.description}</p>
+      )}
 
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
-        {group.description && (
-          <p className="text-sm text-muted-foreground bg-muted/30 rounded-xl px-3 py-2">{group.description}</p>
-        )}
-
-        {isAdmin && (
-          <div className="space-y-2">
-            <p className="text-xs font-semibold text-foreground">{t('inviteGroupToRoom')}</p>
-            <div className="flex gap-2">
-              <input
-                value={inviteSlug}
-                onChange={e => setInviteSlug(e.target.value)}
-                placeholder={t('pasteRoomLink')}
-                className="flex-1 bg-muted/50 border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-              <button
-                onClick={() => inviteGroupMut.mutate()}
-                disabled={!inviteSlug.trim() || inviteGroupMut.isPending}
-                className="px-3 py-2 bg-violet-600 text-white rounded-xl text-sm font-medium disabled:opacity-40 flex items-center gap-1"
-              >
-                <Send className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            {inviteResult && <p className="text-xs text-green-500">{inviteResult}</p>}
+      {isAdmin && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-foreground">{t('inviteGroupToRoom')}</p>
+          <div className="flex gap-2">
+            <input
+              value={inviteSlug}
+              onChange={e => setInviteSlug(e.target.value)}
+              placeholder={t('pasteRoomLink')}
+              className="flex-1 bg-muted/50 border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <button
+              onClick={() => inviteGroupMut.mutate()}
+              disabled={!inviteSlug.trim() || inviteGroupMut.isPending}
+              className="px-3 py-2 bg-violet-600 text-white rounded-xl text-sm font-medium disabled:opacity-40 flex items-center gap-1"
+            >
+              <Send className="w-3.5 h-3.5" />
+            </button>
           </div>
-        )}
+          {inviteResult && <p className="text-xs text-green-500">{inviteResult}</p>}
+        </div>
+      )}
 
-        {isAdmin && (
-          <div className="space-y-2">
-            <p className="text-xs font-semibold text-foreground">{t('addMember')}</p>
-            <div className="flex gap-2">
-              <input
-                value={addUsername}
-                onChange={e => setAddUsername(e.target.value)}
-                placeholder={t('usernamePlaceholder')}
-                className="flex-1 bg-muted/50 border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                dir="ltr"
-              />
-              <button
-                onClick={() => { setAddErr(''); addMemberMut.mutate(); }}
-                disabled={!addUsername.trim() || addMemberMut.isPending}
-                className="px-3 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium disabled:opacity-40 flex items-center gap-1"
-              >
-                <UserPlus className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            {addErr && <p className="text-xs text-destructive">{addErr}</p>}
+      {isAdmin && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-foreground">{t('addMember')}</p>
+          <div className="flex gap-2">
+            <input
+              value={addUsername}
+              onChange={e => setAddUsername(e.target.value)}
+              placeholder={t('usernamePlaceholder')}
+              className="flex-1 bg-muted/50 border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+              dir="ltr"
+            />
+            <button
+              onClick={() => { setAddErr(''); addMemberMut.mutate(); }}
+              disabled={!addUsername.trim() || addMemberMut.isPending}
+              className="px-3 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium disabled:opacity-40 flex items-center gap-1"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+            </button>
           </div>
-        )}
+          {addErr && <p className="text-xs text-destructive">{addErr}</p>}
+        </div>
+      )}
 
-        <div className="space-y-1.5">
-          <p className="text-xs font-semibold text-foreground">{t('members')} ({group.members.length})</p>
-          {group.members.map(m => (
-            <div key={m.id} className="flex items-center gap-3 bg-card border border-border rounded-xl p-2.5">
-              <Avatar name={m.displayName || m.username} color={m.avatarColor} url={m.avatarUrl} size={36} />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <p className="text-sm font-medium text-foreground truncate">{m.displayName || m.username}</p>
-                  {m.role === 'admin' && <Crown className="w-3 h-3 text-yellow-500 flex-shrink-0" />}
-                </div>
-                <p className="text-xs text-muted-foreground">@{m.username}</p>
+      <div className="space-y-1.5">
+        <p className="text-xs font-semibold text-foreground">{t('members')} ({group.members.length})</p>
+        {group.members.map(m => (
+          <div key={m.id} className="flex items-center gap-3 bg-card border border-border rounded-xl p-2.5">
+            <Avatar name={m.displayName || m.username} color={m.avatarColor} url={m.avatarUrl} size={36} />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <p className="text-sm font-medium text-foreground truncate">{m.displayName || m.username}</p>
+                {m.role === 'admin' && <Crown className="w-3 h-3 text-yellow-500 flex-shrink-0" />}
               </div>
-              {isAdmin && m.id !== user?.id && (
-                <button
-                  onClick={() => removeMemberMut.mutate(m.id)}
-                  disabled={removeMemberMut.isPending}
-                  className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-              {!isAdmin && m.id === user?.id && (
-                <button
-                  onClick={() => {
-                    removeMemberMut.mutate(m.id);
-                    onBack();
-                  }}
-                  className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                  title={t('leaveGroup')}
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
-              )}
+              <p className="text-xs text-muted-foreground">@{m.username}</p>
             </div>
-          ))}
-        </div>
-
-        {isCreator && (
-          <button
-            onClick={() => {
-              if (confirm(t('deleteGroupConfirm'))) deleteGroupMut.mutate();
-            }}
-            disabled={deleteGroupMut.isPending}
-            className="w-full flex items-center justify-center gap-2 py-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-2xl text-sm font-semibold"
-          >
-            <Trash2 className="w-4 h-4" />
-            {t('deleteGroup')}
-          </button>
-        )}
+            {isAdmin && m.id !== user?.id && (
+              <button
+                onClick={() => removeMemberMut.mutate(m.id)}
+                disabled={removeMemberMut.isPending}
+                className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+            {!isAdmin && m.id === user?.id && (
+              <button
+                onClick={() => {
+                  removeMemberMut.mutate(m.id);
+                  onBack();
+                }}
+                className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                title={t('leaveGroup')}
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        ))}
       </div>
-    </motion.div>
+
+      {isCreator && (
+        <button
+          onClick={() => {
+            if (confirm(t('deleteGroupConfirm'))) deleteGroupMut.mutate();
+          }}
+          disabled={deleteGroupMut.isPending}
+          className="w-full flex items-center justify-center gap-2 py-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-2xl text-sm font-semibold"
+        >
+          <Trash2 className="w-4 h-4" />
+          {t('deleteGroup')}
+        </button>
+      )}
+    </div>
   );
 }

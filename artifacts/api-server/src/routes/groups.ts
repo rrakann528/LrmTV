@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { db, groupsTable, groupMembersTable, usersTable } from "@workspace/db";
-import { eq, and, desc, sql, inArray } from "drizzle-orm";
+import { db, groupsTable, groupMembersTable, groupMessagesTable, usersTable } from "@workspace/db";
+import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/auth";
 
 const router = Router();
@@ -283,6 +283,99 @@ router.post("/groups/:id/invite-room", requireAuth, async (req: AuthRequest, res
   } catch (err: any) {
     console.error("[groups] invite-room error:", err.message);
     res.status(500).json({ error: "Failed to invite group" });
+  }
+});
+
+router.get("/groups/:id/messages", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.userId!;
+    const groupId = parseInt(req.params.id);
+    if (isNaN(groupId)) { res.status(400).json({ error: "Invalid group ID" }); return; }
+
+    const [membership] = await db.select().from(groupMembersTable)
+      .where(and(eq(groupMembersTable.groupId, groupId), eq(groupMembersTable.userId, userId)))
+      .limit(1);
+    if (!membership) { res.status(403).json({ error: "Not a member" }); return; }
+
+    const msgs = await db
+      .select({
+        id: groupMessagesTable.id,
+        groupId: groupMessagesTable.groupId,
+        senderId: groupMessagesTable.senderId,
+        content: groupMessagesTable.content,
+        createdAt: groupMessagesTable.createdAt,
+        senderUsername: usersTable.username,
+        senderDisplayName: usersTable.displayName,
+        senderAvatarColor: usersTable.avatarColor,
+        senderAvatarUrl: usersTable.avatarUrl,
+      })
+      .from(groupMessagesTable)
+      .innerJoin(usersTable, eq(groupMessagesTable.senderId, usersTable.id))
+      .where(eq(groupMessagesTable.groupId, groupId))
+      .orderBy(asc(groupMessagesTable.createdAt))
+      .limit(200);
+
+    res.json(msgs);
+  } catch (err: any) {
+    console.error("[groups] messages error:", err.message);
+    res.status(500).json({ error: "Failed to fetch messages" });
+  }
+});
+
+router.post("/groups/:id/messages", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.userId!;
+    const groupId = parseInt(req.params.id);
+    if (isNaN(groupId)) { res.status(400).json({ error: "Invalid group ID" }); return; }
+
+    const { content } = req.body;
+    if (!content || typeof content !== "string" || content.trim().length === 0 || content.length > 1000) {
+      res.status(400).json({ error: "Content required (max 1000 chars)" });
+      return;
+    }
+
+    const [membership] = await db.select().from(groupMembersTable)
+      .where(and(eq(groupMembersTable.groupId, groupId), eq(groupMembersTable.userId, userId)))
+      .limit(1);
+    if (!membership) { res.status(403).json({ error: "Not a member" }); return; }
+
+    const [msg] = await db.insert(groupMessagesTable).values({
+      groupId,
+      senderId: userId,
+      content: content.trim(),
+    }).returning();
+
+    const [sender] = await db.select({
+      username: usersTable.username,
+      displayName: usersTable.displayName,
+      avatarColor: usersTable.avatarColor,
+      avatarUrl: usersTable.avatarUrl,
+    }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+
+    const fullMsg = {
+      ...msg,
+      senderUsername: sender?.username,
+      senderDisplayName: sender?.displayName,
+      senderAvatarColor: sender?.avatarColor,
+      senderAvatarUrl: sender?.avatarUrl,
+    };
+
+    const { getIO } = await import("../lib/socket");
+    const io = getIO();
+    if (io) {
+      const members = await db.select({ userId: groupMembersTable.userId })
+        .from(groupMembersTable)
+        .where(eq(groupMembersTable.groupId, groupId));
+      for (const m of members) {
+        if (m.userId === req.user!.id) continue;
+        io.to(`user:${m.userId}`).emit("group:message", fullMsg);
+      }
+    }
+
+    res.status(201).json(fullMsg);
+  } catch (err: any) {
+    console.error("[groups] send message error:", err.message);
+    res.status(500).json({ error: "Failed to send message" });
   }
 });
 
