@@ -54,6 +54,19 @@ const token = conns[0].settings.access_token;
 
 ---
 
+## SEO & Icons
+
+- **Favicon**: `favicon.ico` (16+32px), `favicon-16.png`, `favicon-32.png` — proper PNG for Google indexing
+- **PWA icons**: `icon-192.png`, `icon-512.png` (PNG) + SVG variants for maskable
+- **Apple**: `apple-touch-icon.png` (180px)
+- **OG image**: `opengraph.jpg` (1200×630) — branded for social sharing
+- **Structured data**: WebApplication + WebSite + Organization + BreadcrumbList (JSON-LD)
+- **Sitemap**: `sitemap.xml` with image namespace
+- **Robots**: `robots.txt` allows all except `/api/` and `/room/`
+- **All files in**: `artifacts/web/public/`
+
+---
+
 ## Structure
 
 ```

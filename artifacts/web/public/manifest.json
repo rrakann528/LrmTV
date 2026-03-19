@@ -1,11 +1,12 @@
 {
-  "name": "LrmTV — شاهد مع أصدقائك",
+  "name": "LrmTV — شاهد مع أصدقائك في الوقت الحقيقي",
   "short_name": "LrmTV",
-  "description": "منصة مشاهدة مشتركة في الوقت الحقيقي — شاهد البث المباشر مع أصدقائك",
+  "description": "منصة مشاهدة مشتركة مجانية — شاهد البث المباشر والفيديوهات مع أصدقائك في نفس الوقت. Free watch together platform.",
   "lang": "ar",
   "dir": "rtl",
   "start_url": "/home",
   "scope": "/",
+  "id": "/",
   "display": "standalone",
   "display_override": ["standalone", "browser"],
   "background_color": "#0A0A0A",
@@ -15,9 +16,19 @@
   "categories": ["entertainment", "social"],
   "icons": [
     {
-      "src": "/icon-192.svg",
+      "src": "/favicon-16.png",
+      "sizes": "16x16",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon-32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-192.png",
       "sizes": "192x192",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any"
     },
     {
@@ -27,9 +38,9 @@
       "purpose": "maskable"
     },
     {
-      "src": "/icon-512.svg",
+      "src": "/icon-512.png",
       "sizes": "512x512",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any"
     },
     {
@@ -39,13 +50,21 @@
       "purpose": "maskable"
     }
   ],
+  "screenshots": [
+    {
+      "src": "/opengraph.jpg",
+      "sizes": "1200x630",
+      "type": "image/jpeg",
+      "label": "LrmTV — Watch Together"
+    }
+  ],
   "shortcuts": [
     {
       "name": "إنشاء غرفة",
       "short_name": "غرفة جديدة",
       "description": "ابدأ جلسة مشاهدة جديدة",
       "url": "/home",
-      "icons": [{ "src": "/icon-192.svg", "sizes": "192x192" }]
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }
