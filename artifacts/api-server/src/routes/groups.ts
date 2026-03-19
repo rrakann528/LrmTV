@@ -447,7 +447,7 @@ router.post("/groups/:id/messages", requireAuth, async (req: AuthRequest, res) =
         .from(groupMembersTable)
         .where(eq(groupMembersTable.groupId, groupId));
       for (const m of members) {
-        if (m.userId === req.user!.id) continue;
+        if (m.userId === userId) continue;
         io.to(`user:${m.userId}`).emit("group:message", fullMsg);
       }
     }
