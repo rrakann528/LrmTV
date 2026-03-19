@@ -369,14 +369,14 @@ export default function RoomPage() {
 
   return (
     <div
-      className="h-dvh w-full flex flex-col overflow-hidden"
+      className="h-full w-full flex flex-col overflow-hidden"
       style={{ backgroundImage: `url(${bgImage})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
     >
       {/* Overlay */}
       <div className="absolute inset-0 bg-black/65 backdrop-blur-sm z-0" />
 
       {/* ── Header ──────────────────────────────────────────────────── */}
-      <header className="relative z-10 shrink-0 h-12 md:h-14 glass-panel border-x-0 border-t-0 flex items-center justify-between px-3 md:px-6">
+      <header className="relative z-10 shrink-0 h-10 md:h-14 glass-panel border-x-0 border-t-0 flex items-center justify-between px-2 md:px-6">
         {/* Right (first in RTL): controls */}
         <div className="flex items-center gap-1 md:gap-2 shrink-0">
           {/* Leave */}
@@ -484,7 +484,7 @@ export default function RoomPage() {
           {/* Player area:
               mobile  → fixed 16:9 aspect ratio
               md+     → flex-grow (fills all available height) */}
-          <div className="w-full aspect-video md:aspect-auto md:flex-grow relative bg-black">
+          <div className="w-full aspect-[16/8] md:aspect-auto md:flex-grow relative bg-black">
             {syncState.url ? (
               <>
                 <div style={{ position: 'absolute', inset: 0 }}>
@@ -590,7 +590,7 @@ export default function RoomPage() {
 
           {/* ── YouTube search + direct URL — only for users with control ── */}
           {canControl && (
-            <div className="shrink-0 px-3 py-2.5 border-b border-white/10">
+            <div className="shrink-0 px-2 py-1.5 md:px-3 md:py-2.5 border-b border-white/10">
               <YoutubeSearch
                 onAdd={handleAddVideo}
                 isAdding={addMutation.isPending}
@@ -610,7 +610,7 @@ export default function RoomPage() {
                   key={id}
                   onClick={() => setActiveTab(id)}
                   className={cn(
-                    'flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-[11px] md:text-xs font-medium transition-colors border-b-2 relative',
+                    'flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 md:py-2 text-[10px] md:text-xs font-medium transition-colors border-b-2 relative',
                     activeTab === id
                       ? 'border-primary text-primary bg-white/5'
                       : 'border-transparent text-white/50 hover:text-white hover:bg-white/5',

@@ -15,8 +15,8 @@ import { useI18n } from '@/lib/i18n';
 
 type Tab = 'rooms' | 'friends' | 'groups' | 'profile';
 
-const HEADER_H  = 56;
-const NAV_H     = 64;
+const HEADER_H  = 48;
+const NAV_H     = 56;
 
 function useKeyboardOpen() {
   const [open, setOpen] = useState(false);
@@ -139,13 +139,13 @@ export default function HomePage() {
         className="flex items-center justify-between px-4 bg-card border-b border-border flex-shrink-0 z-30"
         style={{ height: HEADER_H }}
       >
-        <div className="flex items-center gap-2">
-          <img src="/icon-512.png" alt="LrmTV" className="w-8 h-8 rounded-lg" />
-          <span className="font-bold text-lg text-foreground tracking-tight">LrmTV</span>
+        <div className="flex items-center gap-1.5">
+          <img src="/icon-512.png" alt="LrmTV" className="w-7 h-7 rounded-lg" />
+          <span className="font-bold text-base text-foreground tracking-tight">LrmTV</span>
         </div>
         {user ? (
           <button onClick={() => setActiveTab('profile')}>
-            <Avatar name={userName} color={user.avatarColor} url={user.avatarUrl} size={36} />
+            <Avatar name={userName} color={user.avatarColor} url={user.avatarUrl} size={32} />
           </button>
         ) : (
           <button
@@ -196,7 +196,7 @@ export default function HomePage() {
                 <button
                   key={id}
                   onClick={() => setActiveTab(id)}
-                  className="flex flex-col items-center justify-center gap-1 flex-1 py-1"
+                  className="flex flex-col items-center justify-center gap-0.5 flex-1 py-0.5"
                 >
                   <motion.div
                     className="relative"
@@ -204,7 +204,7 @@ export default function HomePage() {
                     transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                   >
                     <Icon
-                      className={`w-6 h-6 ${active ? 'text-primary' : 'text-muted-foreground'}`}
+                      className={`w-5 h-5 ${active ? 'text-primary' : 'text-muted-foreground'}`}
                       strokeWidth={active ? 2.5 : 1.8}
                     />
                     {badge > 0 && (
