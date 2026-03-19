@@ -17,11 +17,9 @@ type Tab = 'rooms' | 'friends' | 'groups' | 'profile';
 
 const HEADER_H  = 56;
 const NAV_H     = 64;
-const AD_BAR_H  = 60;
 
-function useVisualViewport() {
-  const [height, setHeight] = useState(() => window.visualViewport?.height ?? window.innerHeight);
-  const [keyboardOpen, setKeyboardOpen] = useState(false);
+function useKeyboardOpen() {
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     const vv = window.visualViewport;
@@ -35,28 +33,20 @@ function useVisualViewport() {
     };
 
     const update = () => {
-      setHeight(vv.height);
       const diff = window.innerHeight - vv.height;
-      setKeyboardOpen(diff > 80 && isEditable());
+      setOpen(diff > 80 && isEditable());
     };
 
-    const onWindowResize = () => setHeight(vv.height);
-
-    update();
     vv.addEventListener('resize', update);
-    window.addEventListener('resize', onWindowResize);
-    return () => {
-      vv.removeEventListener('resize', update);
-      window.removeEventListener('resize', onWindowResize);
-    };
+    return () => vv.removeEventListener('resize', update);
   }, []);
 
-  return { viewportHeight: height, keyboardOpen };
+  return open;
 }
 
 export default function HomePage() {
   const { t } = useI18n();
-  const { viewportHeight, keyboardOpen } = useVisualViewport();
+  const keyboardOpen = useKeyboardOpen();
   const [, setLocation] = useLocation();
   const search = useSearch();
   const params = new URLSearchParams(search);
@@ -143,7 +133,7 @@ export default function HomePage() {
   const userName = user?.displayName || user?.username || t('guestName');
 
   return (
-    <div className="bg-background flex flex-col" style={{ height: keyboardOpen ? viewportHeight : viewportHeight - AD_BAR_H, overflow: 'hidden' }}>
+    <div className="bg-background flex flex-col h-full overflow-hidden">
       {/* ── Header ─────────────────────────────────────────── */}
       <div
         className="flex items-center justify-between px-4 bg-card border-b border-border flex-shrink-0 z-30"
