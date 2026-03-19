@@ -645,10 +645,8 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
           if (cancelled) return;
           destroyAll();
           setStatusMsg('native');
-          // Full reset: remove crossorigin, clear src, then reload — critical on iOS Safari
-          // after HLS.js was previously attached to the same video element
           video.removeAttribute('crossorigin');
-          video.removeAttribute('referrerpolicy');
+          video.setAttribute('referrerpolicy', 'no-referrer');
           video.removeAttribute('src');
           video.load();
           video.src = src;
@@ -695,7 +693,7 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
           const proxyUrl = `/api/proxy/manifest?url=${encodeURIComponent(src)}`;
           setStatusMsg('hls-proxy');
           video.removeAttribute('crossorigin');
-          video.removeAttribute('referrerpolicy');
+          video.setAttribute('referrerpolicy', 'no-referrer');
           video.removeAttribute('src');
           video.load();
           video.src = proxyUrl;
@@ -791,12 +789,7 @@ export const HlsPlayer = forwardRef<HlsPlayerHandle, HlsPlayerProps>(
           hls.loadSource(src);
           hls.attachMedia(video);
         } else if (video.canPlayType('application/vnd.apple.mpegurl') !== '') {
-          // Safari (iOS/macOS) without MSE — native HLS only.
-          // Use API proxy first: all segment URLs are rewritten through our server which
-          // adds CORS headers, handles Referer auth, and fixes the common black-screen
-          // (segments loading silently after manifest parses fine on iOS Safari).
-          // Fall back to direct native if the proxy manifest itself can't be fetched.
-          s7_nativeApiProxy();
+          s2_native(() => s7_nativeApiProxy());
         } else {
           setStatusMsg(null); setError('unsupported');
         }
